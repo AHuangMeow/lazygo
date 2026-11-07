@@ -68,16 +68,14 @@ fn App() -> Element {
                                 armed: reset_armed(),
                                 rotation: reset_rotation(),
                                 on_click: move |_| {
+                                    reset_rotation.set(reset_rotation() + 360);
                                     if reset_armed() {
                                         game.set(Game::new(size));
                                         reset_armed.set(false);
-                                        menu_open.set(false);
-                                        reset_rotation.set(reset_rotation() + 360);
                                     } else {
                                         reset_armed.set(true);
-                                        menu_open.set(false);
-                                        reset_rotation.set(reset_rotation() + 360);
                                     }
+                                    menu_open.set(false);
                                 },
                             }
                         }
@@ -85,11 +83,7 @@ fn App() -> Element {
                             size,
                             initial,
                             open: menu_open(),
-                            on_toggle: move |_| {
-                                if initial {
-                                    menu_open.set(!menu_open());
-                                }
-                            },
+                            on_toggle: move |_| menu_open.set(!menu_open()),
                             on_select: move |option| {
                                 game.set(Game::new(option));
                                 menu_open.set(false);

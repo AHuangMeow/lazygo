@@ -5,11 +5,49 @@ use crate::APP_ICON;
 
 const STAR_RADIUS: f64 = 40.0 / 304.0;
 const HIT_RADIUS: f64 = 0.36;
+const STONE_OUTER_RADIUS: f64 = 0.46;
+const STONE_INNER_RADIUS: f64 = 0.40;
+const MOVE_DOT_RADIUS: f64 = 0.12;
+
+fn stone_classes(stone: Stone) -> (&'static str, &'static str, &'static str) {
+    match stone {
+        Stone::Black => ("stone-black-outer", "stone-black-inner", "move-dot-black"),
+        Stone::White => ("stone-white-outer", "stone-white-inner", "move-dot-white"),
+    }
+}
+
+fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
+    let (outer, inner, dot) = stone_classes(stone);
+
+    rsx! {
+        circle {
+            class: "{outer}",
+            cx: "{x}",
+            cy: "{y}",
+            r: "{STONE_OUTER_RADIUS}",
+        }
+        circle {
+            class: "{inner}",
+            cx: "{x}",
+            cy: "{y}",
+            r: "{STONE_INNER_RADIUS}",
+        }
+        if last_move {
+            circle {
+                class: "{dot}",
+                cx: "{x}",
+                cy: "{y}",
+                r: "{MOVE_DOT_RADIUS}",
+            }
+        }
+    }
+}
 
 #[component]
 pub fn Board(game: Game, on_play: EventHandler<(usize, usize)>) -> Element {
-    let max = game.size() - 1;
-    let stars = star_points(game.size());
+    let size = game.size();
+    let max = size - 1;
+    let stars = star_points(size);
     let last_move = game.last_move();
 
     rsx! {
@@ -43,26 +81,7 @@ pub fn Board(game: Game, on_play: EventHandler<(usize, usize)>) -> Element {
             for y in 0..=max {
                 for x in 0..=max {
                     if let Some(stone) = game.stone_at(x, y) {
-                        circle {
-                            class: if stone == Stone::Black { "stone-black-outer" } else { "stone-white-outer" },
-                            cx: "{x}",
-                            cy: "{y}",
-                            r: "0.46",
-                        }
-                        circle {
-                            class: if stone == Stone::Black { "stone-black-inner" } else { "stone-white-inner" },
-                            cx: "{x}",
-                            cy: "{y}",
-                            r: "0.40",
-                        }
-                        if last_move == Some((x, y)) {
-                            circle {
-                                class: if stone == Stone::Black { "move-dot-black" } else { "move-dot-white" },
-                                cx: "{x}",
-                                cy: "{y}",
-                                r: "0.12",
-                            }
-                        }
+                        {stone_node(x, y, stone, last_move == Some((x, y)))}
                     }
                     circle {
                         class: "board-hit",
