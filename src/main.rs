@@ -1,5 +1,9 @@
 use dioxus::prelude::*;
-use lazygo::game::{star_points, Game, Stone, BOARD_SIZES, DEFAULT_SIZE};
+use lazygo::game::{Game, Stone, BOARD_SIZES, DEFAULT_SIZE};
+
+mod ui;
+
+use ui::Board;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 const APP_ICON: Asset = asset!("/assets/icon.png");
@@ -39,12 +43,8 @@ fn App() -> Element {
     let mut reset_rotation = use_signal(|| 0i32);
     let current = game();
     let size = current.size();
-    let max = size - 1;
     let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
     let initial = current.is_initial();
-    let star_radius = 40.0 / 304.0;
-    let hit_radius = 0.36;
-    let stars = star_points(size);
     let (back, front) = match current.turn() {
         Stone::Black => ((43.0, Stone::White), (21.0, Stone::Black)),
         Stone::White => ((21.0, Stone::Black), (43.0, Stone::White)),
@@ -91,74 +91,15 @@ fn App() -> Element {
             }
             section { class: "content", style: "{board_margin}",
                 div { class: "board-column",
-                    svg {
-                        class: "board",
-                        view_box: "0 0 {max} {max}",
-                        for index in 0..=max {
-                            line {
-                                class: "board-line",
-                                x1: "0",
-                                y1: "{index}",
-                                x2: "{max}",
-                                y2: "{index}",
+                    Board {
+                        game: current.clone(),
+                        on_play: move |(x, y)| {
+                            if let Some(next) = game().play(x, y) {
+                                game.set(next);
+                                reset_armed.set(false);
+                                menu_open.set(false);
                             }
-                            line {
-                                class: "board-line",
-                                x1: "{index}",
-                                y1: "0",
-                                x2: "{index}",
-                                y2: "{max}",
-                            }
-                        }
-                        for (x, y) in stars {
-                            circle {
-                                class: "board-star",
-                                cx: "{x}",
-                                cy: "{y}",
-                                r: "{star_radius}",
-                            }
-                        }
-                        for y in 0..=max {
-                            for x in 0..=max {
-                                if let Some(stone) = current.stone_at(x, y) {
-                                    circle {
-                                        class: if stone == Stone::Black { "stone-black-outer" } else { "stone-white-outer" },
-                                        cx: "{x}",
-                                        cy: "{y}",
-                                        r: "0.46",
-                                    }
-                                    circle {
-                                        class: if stone == Stone::Black { "stone-black-inner" } else { "stone-white-inner" },
-                                        cx: "{x}",
-                                        cy: "{y}",
-                                        r: "0.40",
-                                    }
-                                    if current.last_move() == Some((x, y)) {
-                                        circle {
-                                            class: if stone == Stone::Black { "move-dot-black" } else { "move-dot-white" },
-                                            cx: "{x}",
-                                            cy: "{y}",
-                                            r: "0.12",
-                                        }
-                                    }
-                                }
-                                circle {
-                                    class: "board-hit",
-                                    cx: "{x}",
-                                    cy: "{y}",
-                                    r: "{hit_radius}",
-                                    onclick: move |_| {
-                                        let position = game();
-
-                                        if let Some(next) = position.play(x, y) {
-                                            game.set(next);
-                                            reset_armed.set(false);
-                                            menu_open.set(false);
-                                        }
-                                    },
-                                }
-                            }
-                        }
+                        },
                     }
                     div { class: "board-footer",
                         div { class: "board-actions",
