@@ -6,6 +6,8 @@
     --ctp-text: #cdd6f4;
     --ctp-subtext0: #a6adc8;
     --ctp-overlay0: #6c7086;
+    --ctp-overlay1: #7f849c;
+    --ctp-overlay2: #9399b2;
     --ctp-base: #1e1e2e;
     --ctp-red: #f38ba8;
     --footer-margin: 24px;
@@ -141,13 +143,13 @@ body {
 }
 
 .board-line {
-    stroke: var(--ctp-overlay0);
+    stroke: var(--ctp-overlay2);
     stroke-width: 0.0657894737;
     stroke-linecap: round;
 }
 
 .board-star {
-    fill: var(--ctp-overlay0);
+    fill: var(--ctp-overlay1);
 }
 
 .stone-black-outer {
