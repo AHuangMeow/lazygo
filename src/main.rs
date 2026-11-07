@@ -1,182 +1,9 @@
 use dioxus::prelude::*;
+use lazygo::game::{star_points, Game, Stone, BOARD_SIZES, DEFAULT_SIZE};
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 const APP_ICON: Asset = asset!("/assets/icon.png");
 const APP_FONT: Asset = asset!("/assets/fonts/maiyuan-ii-regular.ttf");
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Stone {
-    Black,
-    White,
-}
-
-impl Stone {
-    fn other(self) -> Self {
-        match self {
-            Self::Black => Self::White,
-            Self::White => Self::Black,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq)]
-struct Game {
-    size: usize,
-    stones: Vec<Option<Stone>>,
-    turn: Stone,
-    last_move: Option<(usize, usize)>,
-    history: Vec<Vec<Option<Stone>>>,
-}
-
-fn new_game(size: usize) -> Game {
-    let stones = vec![None; size * size];
-    Game {
-        size,
-        stones: stones.clone(),
-        turn: Stone::Black,
-        last_move: None,
-        history: vec![stones],
-    }
-}
-
-fn is_initial(game: &Game) -> bool {
-    game.history.len() == 1
-        && game.turn == Stone::Black
-        && game.last_move.is_none()
-        && game.stones.iter().all(Option::is_none)
-}
-
-fn neighbors(index: usize, size: usize) -> Vec<usize> {
-    let x = index % size;
-    let y = index / size;
-    let mut result = Vec::with_capacity(4);
-
-    if x > 0 {
-        result.push(index - 1);
-    }
-    if x + 1 < size {
-        result.push(index + 1);
-    }
-    if y > 0 {
-        result.push(index - size);
-    }
-    if y + 1 < size {
-        result.push(index + size);
-    }
-
-    result
-}
-
-fn group_and_liberties(stones: &[Option<Stone>], size: usize, start: usize) -> (Vec<usize>, usize) {
-    let color = stones[start];
-    let mut group = Vec::new();
-    let mut stack = vec![start];
-    let mut seen = vec![false; stones.len()];
-    let mut liberty_seen = vec![false; stones.len()];
-    let mut liberties = 0;
-
-    while let Some(index) = stack.pop() {
-        if seen[index] {
-            continue;
-        }
-
-        seen[index] = true;
-        group.push(index);
-
-        for neighbor in neighbors(index, size) {
-            match stones[neighbor] {
-                None => {
-                    if !liberty_seen[neighbor] {
-                        liberty_seen[neighbor] = true;
-                        liberties += 1;
-                    }
-                }
-                Some(stone) if Some(stone) == color => {
-                    if !seen[neighbor] {
-                        stack.push(neighbor);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    (group, liberties)
-}
-
-fn play(game: &Game, x: usize, y: usize) -> Option<Game> {
-    let size = game.size;
-
-    if x >= size || y >= size {
-        return None;
-    }
-
-    let index = y * size + x;
-
-    if game.stones[index].is_some() {
-        return None;
-    }
-
-    let mut next = game.clone();
-    next.stones[index] = Some(game.turn);
-    let opponent = game.turn.other();
-    let mut visited = vec![false; size * size];
-
-    for neighbor in neighbors(index, size) {
-        if visited[neighbor] {
-            continue;
-        }
-
-        if next.stones[neighbor] == Some(opponent) {
-            let (group, liberties) = group_and_liberties(&next.stones, size, neighbor);
-
-            for member in &group {
-                visited[*member] = true;
-            }
-
-            if liberties == 0 {
-                for member in group {
-                    next.stones[member] = None;
-                }
-            }
-        }
-    }
-
-    let (_, liberties) = group_and_liberties(&next.stones, size, index);
-
-    if liberties == 0 {
-        return None;
-    }
-
-    if next.history.iter().any(|position| position == &next.stones) {
-        return None;
-    }
-
-    next.history.push(next.stones.clone());
-    next.last_move = Some((x, y));
-    next.turn = opponent;
-
-    Some(next)
-}
-
-fn star_points(size: usize) -> Vec<(usize, usize)> {
-    match size {
-        9 => vec![(2, 2), (2, 6), (4, 4), (6, 2), (6, 6)],
-        13 => vec![(3, 3), (3, 9), (6, 6), (9, 3), (9, 9)],
-        19 => vec![
-            (3, 3),
-            (3, 9),
-            (3, 15),
-            (9, 3),
-            (9, 9),
-            (9, 15),
-            (15, 3),
-            (15, 9),
-            (15, 15),
-        ],
-        _ => Vec::new(),
-    }
-}
 
 fn indicator_stone(x: f64, stone: Stone) -> Element {
     let (outer, inner) = match stone {
@@ -206,19 +33,19 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut game = use_signal(|| new_game(9));
+    let mut game = use_signal(|| Game::new(DEFAULT_SIZE));
     let mut menu_open = use_signal(|| false);
     let mut reset_armed = use_signal(|| false);
     let mut reset_rotation = use_signal(|| 0i32);
     let current = game();
-    let size = current.size;
+    let size = current.size();
     let max = size - 1;
     let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
-    let initial = is_initial(&current);
+    let initial = current.is_initial();
     let star_radius = 40.0 / 304.0;
     let hit_radius = 0.36;
     let stars = star_points(size);
-    let (back, front) = match current.turn {
+    let (back, front) = match current.turn() {
         Stone::Black => ((43.0, Stone::White), (21.0, Stone::Black)),
         Stone::White => ((21.0, Stone::Black), (43.0, Stone::White)),
     };
@@ -293,7 +120,7 @@ fn App() -> Element {
                         }
                         for y in 0..=max {
                             for x in 0..=max {
-                                if let Some(stone) = current.stones[y * size + x] {
+                                if let Some(stone) = current.stone_at(x, y) {
                                     circle {
                                         class: if stone == Stone::Black { "stone-black-outer" } else { "stone-white-outer" },
                                         cx: "{x}",
@@ -306,7 +133,7 @@ fn App() -> Element {
                                         cy: "{y}",
                                         r: "0.40",
                                     }
-                                    if current.last_move == Some((x, y)) {
+                                    if current.last_move() == Some((x, y)) {
                                         circle {
                                             class: if stone == Stone::Black { "move-dot-black" } else { "move-dot-white" },
                                             cx: "{x}",
@@ -323,7 +150,7 @@ fn App() -> Element {
                                     onclick: move |_| {
                                         let position = game();
 
-                                        if let Some(next) = play(&position, x, y) {
+                                        if let Some(next) = position.play(x, y) {
                                             game.set(next);
                                             reset_armed.set(false);
                                             menu_open.set(false);
@@ -340,10 +167,7 @@ fn App() -> Element {
                                 r#type: "button",
                                 aria_label: "Pass",
                                 onclick: move |_| {
-                                    let mut next = game();
-                                    next.turn = next.turn.other();
-                                    next.last_move = None;
-                                    game.set(next);
+                                    game.set(game().pass());
                                     reset_armed.set(false);
                                     menu_open.set(false);
                                 },
@@ -361,7 +185,7 @@ fn App() -> Element {
                                 style: "transform: rotate({reset_rotation}deg);",
                                 onclick: move |_| {
                                     if reset_armed() {
-                                        game.set(new_game(size));
+                                        game.set(Game::new(size));
                                         reset_armed.set(false);
                                         menu_open.set(false);
                                         reset_rotation.set(reset_rotation() + 360);
@@ -401,12 +225,12 @@ fn App() -> Element {
                                     onclick: move |_| menu_open.set(false),
                                 }
                                 div { class: "size-options",
-                                    for option in [9usize, 13usize, 19usize] {
+                                    for option in BOARD_SIZES {
                                         button {
                                             class: if size == option { "size-option selected" } else { "size-option" },
                                             r#type: "button",
                                             onclick: move |_| {
-                                                game.set(new_game(option));
+                                                game.set(Game::new(option));
                                                 menu_open.set(false);
                                                 reset_armed.set(false);
                                             },
