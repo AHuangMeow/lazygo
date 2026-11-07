@@ -3,11 +3,18 @@ use lazygo::game::{star_points, Game, Stone, BOARD_SIZES};
 
 use crate::APP_ICON;
 
-const STAR_RADIUS: f64 = 40.0 / 304.0;
+const STAR_RADIUS: f64 = 50.0 / 304.0;
 const HIT_RADIUS: f64 = 0.36;
 const STONE_OUTER_RADIUS: f64 = 0.46;
 const STONE_INNER_RADIUS: f64 = 0.40;
 const MOVE_DOT_RADIUS: f64 = 0.12;
+const PENDING_FRAME_HALF: f64 = 0.52;
+const RULES: [(&str, &str); 3] = [
+    ("chinese", "中国规则"),
+    ("japanese", "日本规则"),
+    ("ing", "应氏规则"),
+];
+pub const DEFAULT_RULE: &str = RULES[0].0;
 
 fn stone_classes(stone: Stone) -> (&'static str, &'static str, &'static str) {
     match stone {
@@ -44,7 +51,11 @@ fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
 }
 
 #[component]
-pub fn Board(game: Game, on_play: EventHandler<(usize, usize)>) -> Element {
+pub fn Board(
+    game: Game,
+    pending: Option<(usize, usize)>,
+    on_select: EventHandler<(usize, usize)>,
+) -> Element {
     let size = game.size();
     let max = size - 1;
     let stars = star_points(size);
@@ -83,13 +94,24 @@ pub fn Board(game: Game, on_play: EventHandler<(usize, usize)>) -> Element {
                     if let Some(stone) = game.stone_at(x, y) {
                         {stone_node(x, y, stone, last_move == Some((x, y)))}
                     }
+                    if pending == Some((x, y)) {
+                        {stone_node(x, y, game.turn(), false)}
+                        rect {
+                            class: "pending-frame",
+                            x: "{x as f64 - PENDING_FRAME_HALF}",
+                            y: "{y as f64 - PENDING_FRAME_HALF}",
+                            width: "{PENDING_FRAME_HALF * 2.0}",
+                            height: "{PENDING_FRAME_HALF * 2.0}",
+                            rx: "0.14",
+                        }
+                    }
                     circle {
                         class: "board-hit",
                         fill: "none",
                         cx: "{x}",
                         cy: "{y}",
                         r: "{HIT_RADIUS}",
-                        onclick: move |_| on_play.call((x, y)),
+                        onclick: move |_| on_select.call((x, y)),
                     }
                 }
             }
@@ -115,6 +137,39 @@ fn indicator_stone(x: f64, stone: Stone) -> Element {
             cx: "{x}",
             cy: "20",
             r: "13",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum HistoryDirection {
+    Undo,
+    Redo,
+}
+
+#[component]
+pub fn HistoryButton(
+    direction: HistoryDirection,
+    enabled: bool,
+    on_click: EventHandler<()>,
+) -> Element {
+    let (label, path) = match direction {
+        HistoryDirection::Undo => ("Undo", "M15 6l-9 6 9 6z"),
+        HistoryDirection::Redo => ("Redo", "M9 6l9 6-9 6z"),
+    };
+
+    rsx! {
+        button {
+            class: "history-button",
+            r#type: "button",
+            aria_label: "{label}",
+            disabled: !enabled,
+            onclick: move |_| on_click.call(()),
+            svg {
+                class: "history-icon",
+                view_box: "0 0 24 24",
+                path { d: "{path}" }
+            }
         }
     }
 }
@@ -191,6 +246,84 @@ pub fn ResetButton(armed: bool, rotation: i32, on_click: EventHandler<()>) -> El
 }
 
 #[component]
+pub fn ConfirmButton(enabled: bool, on_click: EventHandler<()>) -> Element {
+    rsx! {
+        button {
+            class: "confirm-button",
+            r#type: "button",
+            disabled: !enabled,
+            onclick: move |_| on_click.call(()),
+            "确认"
+        }
+    }
+}
+
+#[component]
+pub fn RuleMenu(
+    value: String,
+    open: bool,
+    on_toggle: EventHandler<()>,
+    on_select: EventHandler<String>,
+) -> Element {
+    let label = RULES
+        .iter()
+        .copied()
+        .find(|(key, _)| *key == value.as_str())
+        .map(|(_, label)| label)
+        .unwrap_or(RULES[0].1);
+
+    rsx! {
+        div { class: "menu rule-menu",
+            button {
+                class: if open { "menu-trigger rule-trigger open" } else { "menu-trigger rule-trigger" },
+                r#type: "button",
+                aria_label: "Rules",
+                aria_expanded: if open { "true" } else { "false" },
+                onclick: move |_| on_toggle.call(()),
+                span { "{label}" }
+                span { class: "chevron" }
+            }
+            if open {
+                div {
+                    class: "menu-backdrop",
+                    onclick: move |_| on_toggle.call(()),
+                }
+                div { class: "menu-options rule-options",
+                    for (key, label) in RULES {
+                        button {
+                            class: if value == key { "menu-option selected" } else { "menu-option" },
+                            r#type: "button",
+                            onclick: move |_| on_select.call(key.to_string()),
+                            "{label}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn KomiField(value: String, on_input: EventHandler<String>) -> Element {
+    rsx! {
+        label { class: "komi-field",
+            span { class: "komi-label", "贴目" }
+            input {
+                class: "komi-input",
+                r#type: "number",
+                inputmode: "decimal",
+                step: "0.5",
+                min: "0",
+                max: "100",
+                value: "{value}",
+                aria_label: "Komi",
+                oninput: move |event| on_input.call(event.value()),
+            }
+        }
+    }
+}
+
+#[component]
 pub fn SizeMenu(
     size: usize,
     initial: bool,
@@ -201,9 +334,9 @@ pub fn SizeMenu(
     let expanded = open && initial;
 
     rsx! {
-        div { class: "size-menu",
+        div { class: "menu size-menu",
             button {
-                class: if expanded { "size-trigger open" } else { "size-trigger" },
+                class: if expanded { "menu-trigger size-trigger open" } else { "menu-trigger size-trigger" },
                 r#type: "button",
                 aria_label: "Board size",
                 aria_expanded: if expanded { "true" } else { "false" },
@@ -214,13 +347,13 @@ pub fn SizeMenu(
             }
             if expanded {
                 div {
-                    class: "size-backdrop",
+                    class: "menu-backdrop",
                     onclick: move |_| on_toggle.call(()),
                 }
-                div { class: "size-options",
+                div { class: "menu-options size-options",
                     for option in BOARD_SIZES {
                         button {
-                            class: if size == option { "size-option selected" } else { "size-option" },
+                            class: if size == option { "menu-option selected" } else { "menu-option" },
                             r#type: "button",
                             onclick: move |_| on_select.call(option),
                             "{option}x{option}"

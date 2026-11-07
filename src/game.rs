@@ -17,12 +17,17 @@ impl Stone {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Game {
-    size: usize,
+struct State {
     stones: Vec<Option<Stone>>,
     turn: Stone,
     last_move: Option<(usize, usize)>,
-    history: Vec<Vec<Option<Stone>>>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Game {
+    size: usize,
+    states: Vec<State>,
+    cursor: usize,
 }
 
 impl Game {
@@ -31,11 +36,17 @@ impl Game {
 
         Self {
             size,
-            stones: stones.clone(),
-            turn: Stone::Black,
-            last_move: None,
-            history: vec![stones],
+            states: vec![State {
+                stones,
+                turn: Stone::Black,
+                last_move: None,
+            }],
+            cursor: 0,
         }
+    }
+
+    fn current(&self) -> &State {
+        &self.states[self.cursor]
     }
 
     pub fn size(&self) -> usize {
@@ -43,11 +54,11 @@ impl Game {
     }
 
     pub fn turn(&self) -> Stone {
-        self.turn
+        self.current().turn
     }
 
     pub fn last_move(&self) -> Option<(usize, usize)> {
-        self.last_move
+        self.current().last_move
     }
 
     pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {
@@ -55,14 +66,39 @@ impl Game {
             return None;
         }
 
-        self.stones[y * self.size + x]
+        self.current().stones[y * self.size + x]
     }
 
     pub fn is_initial(&self) -> bool {
-        self.history.len() == 1
-            && self.turn == Stone::Black
-            && self.last_move.is_none()
-            && self.stones.iter().all(Option::is_none)
+        self.cursor == 0
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.cursor > 0
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.cursor + 1 < self.states.len()
+    }
+
+    pub fn undo(&self) -> Option<Self> {
+        if !self.can_undo() {
+            return None;
+        }
+
+        let mut next = self.clone();
+        next.cursor -= 1;
+        Some(next)
+    }
+
+    pub fn redo(&self) -> Option<Self> {
+        if !self.can_redo() {
+            return None;
+        }
+
+        let mut next = self.clone();
+        next.cursor += 1;
+        Some(next)
     }
 
     pub fn play(&self, x: usize, y: usize) -> Option<Self> {
@@ -70,15 +106,17 @@ impl Game {
             return None;
         }
 
+        let current = self.current();
         let index = y * self.size + x;
 
-        if self.stones[index].is_some() {
+        if current.stones[index].is_some() {
             return None;
         }
 
-        let mut next = self.clone();
-        next.stones[index] = Some(self.turn);
-        let opponent = self.turn.other();
+        let color = current.turn;
+        let opponent = color.other();
+        let mut stones = current.stones.clone();
+        stones[index] = Some(color);
         let mut visited = vec![false; self.size * self.size];
 
         for neighbor in neighbors(index, self.size) {
@@ -86,8 +124,8 @@ impl Game {
                 continue;
             }
 
-            if next.stones[neighbor] == Some(opponent) {
-                let (group, liberties) = group_and_liberties(&next.stones, self.size, neighbor);
+            if stones[neighbor] == Some(opponent) {
+                let (group, liberties) = group_and_liberties(&stones, self.size, neighbor);
 
                 for member in &group {
                     visited[*member] = true;
@@ -95,29 +133,43 @@ impl Game {
 
                 if liberties == 0 {
                     for member in group {
-                        next.stones[member] = None;
+                        stones[member] = None;
                     }
                 }
             }
         }
 
-        let (_, liberties) = group_and_liberties(&next.stones, self.size, index);
+        let (_, liberties) = group_and_liberties(&stones, self.size, index);
 
-        if liberties == 0 || next.history.iter().any(|position| position == &next.stones) {
+        if liberties == 0
+            || self.states[..=self.cursor]
+                .iter()
+                .any(|state| state.stones == stones)
+        {
             return None;
         }
 
-        next.history.push(next.stones.clone());
-        next.last_move = Some((x, y));
-        next.turn = opponent;
-
+        let mut next = self.clone();
+        next.states.truncate(self.cursor + 1);
+        next.states.push(State {
+            stones,
+            turn: opponent,
+            last_move: Some((x, y)),
+        });
+        next.cursor += 1;
         Some(next)
     }
 
     pub fn pass(&self) -> Self {
+        let current = self.current();
         let mut next = self.clone();
-        next.turn = self.turn.other();
-        next.last_move = None;
+        next.states.truncate(self.cursor + 1);
+        next.states.push(State {
+            stones: current.stones.clone(),
+            turn: current.turn.other(),
+            last_move: None,
+        });
+        next.cursor += 1;
         next
     }
 }
@@ -221,10 +273,12 @@ mod tests {
 
         Game {
             size,
-            stones: stones.clone(),
-            turn,
-            last_move: None,
-            history: vec![stones],
+            states: vec![State {
+                stones,
+                turn,
+                last_move: None,
+            }],
+            cursor: 0,
         }
     }
 
@@ -236,6 +290,8 @@ mod tests {
         assert_eq!(game.turn(), Stone::Black);
         assert_eq!(game.last_move(), None);
         assert!(game.is_initial());
+        assert!(!game.can_undo());
+        assert!(!game.can_redo());
 
         for y in 0..9 {
             for x in 0..9 {
@@ -252,6 +308,8 @@ mod tests {
         assert_eq!(game.turn(), Stone::White);
         assert_eq!(game.last_move(), Some((4, 4)));
         assert!(!game.is_initial());
+        assert!(game.can_undo());
+        assert!(!game.can_redo());
     }
 
     #[test]
@@ -290,23 +348,69 @@ mod tests {
 
         let game = Game {
             size: 3,
-            stones: vec![None; 9],
-            turn: Stone::Black,
-            last_move: None,
-            history: vec![repeated],
+            states: vec![
+                State {
+                    stones: repeated,
+                    turn: Stone::White,
+                    last_move: None,
+                },
+                State {
+                    stones: vec![None; 9],
+                    turn: Stone::Black,
+                    last_move: None,
+                },
+            ],
+            cursor: 1,
         };
 
         assert!(game.play(1, 1).is_none());
     }
 
     #[test]
-    fn pass_switches_turn_and_clears_last_move() {
+    fn undo_and_redo_restore_state() {
         let game = Game::new(9).play(4, 4).unwrap();
-        let game = game.pass();
+        let undone = game.undo().unwrap();
 
-        assert_eq!(game.turn(), Stone::Black);
+        assert_eq!(undone.stone_at(4, 4), None);
+        assert_eq!(undone.turn(), Stone::Black);
+        assert_eq!(undone.last_move(), None);
+        assert!(undone.is_initial());
+        assert!(undone.can_redo());
+
+        let redone = undone.redo().unwrap();
+
+        assert_eq!(redone.stone_at(4, 4), Some(Stone::Black));
+        assert_eq!(redone.turn(), Stone::White);
+        assert_eq!(redone.last_move(), Some((4, 4)));
+        assert!(!redone.can_redo());
+    }
+
+    #[test]
+    fn new_move_after_undo_discards_redo() {
+        let game = Game::new(9).play(4, 4).unwrap();
+        let game = game.undo().unwrap().play(3, 3).unwrap();
+
+        assert_eq!(game.stone_at(3, 3), Some(Stone::Black));
+        assert_eq!(game.stone_at(4, 4), None);
+        assert!(!game.can_redo());
+    }
+
+    #[test]
+    fn pass_is_undoable() {
+        let game = Game::new(9).pass();
+
+        assert_eq!(game.turn(), Stone::White);
         assert_eq!(game.last_move(), None);
-        assert_eq!(game.stone_at(4, 4), Some(Stone::Black));
         assert!(!game.is_initial());
+
+        let undone = game.undo().unwrap();
+
+        assert_eq!(undone.turn(), Stone::Black);
+        assert!(undone.is_initial());
+
+        let redone = undone.redo().unwrap();
+
+        assert_eq!(redone.turn(), Stone::White);
+        assert_eq!(redone.last_move(), None);
     }
 }

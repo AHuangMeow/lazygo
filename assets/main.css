@@ -129,7 +129,7 @@ body {
 .board-column {
     display: flex;
     flex-direction: column;
-    gap: var(--board-margin, 14px);
+    gap: 0;
     width: 100%;
 }
 
@@ -149,7 +149,7 @@ body {
 }
 
 .board-star {
-    fill: var(--ctp-overlay1);
+    fill: var(--ctp-overlay2);
 }
 
 .stone-black-outer {
@@ -182,11 +182,19 @@ body {
     pointer-events: all;
 }
 
+.pending-frame {
+    fill: none;
+    stroke: var(--ctp-text);
+    stroke-width: 0.08;
+    stroke-linejoin: round;
+}
+
 .board-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+    margin-top: var(--board-margin, 14px);
     margin-left: calc(var(--footer-margin) - var(--board-margin, 24px));
     margin-right: calc(var(--footer-margin) - var(--board-margin, 24px));
     border-top: 2.5px solid var(--ctp-overlay0);
@@ -197,6 +205,66 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.board-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    margin-left: calc(var(--footer-margin) - var(--board-margin, 24px));
+    margin-right: calc(var(--footer-margin) - var(--board-margin, 24px));
+}
+
+.settings-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.komi-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 6px 10px;
+    border: 2.5px solid var(--ctp-overlay0);
+    border-radius: 10px;
+    background: var(--ctp-surface0);
+}
+
+.komi-field:focus-within {
+    border-color: var(--ctp-overlay2);
+}
+
+.komi-label {
+    color: var(--ctp-subtext0);
+    font-size: 0.85rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.komi-input {
+    width: 44px;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--ctp-text);
+    font: inherit;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    text-align: center;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.komi-input::-webkit-outer-spin-button,
+.komi-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .turn-indicator {
@@ -285,25 +353,95 @@ body {
     fill: var(--ctp-red);
 }
 
+.history-button {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 2.5px solid var(--ctp-overlay0);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ctp-subtext0);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 200ms ease;
+}
+
+.history-button:hover:not(:disabled) {
+    color: var(--ctp-text);
+}
+
+.history-button:disabled {
+    color: var(--ctp-overlay0);
+    opacity: 0.45;
+    cursor: default;
+}
+
+.history-button:focus-visible {
+    outline: 2px solid var(--ctp-overlay0);
+    outline-offset: 2px;
+}
+
+.history-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+.confirm-button {
+    min-width: 72px;
+    min-height: 38px;
+    padding: 6px 12px;
+    border: 2.5px solid var(--ctp-overlay2);
+    border-radius: 10px;
+    background: var(--ctp-surface0);
+    color: var(--ctp-text);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.confirm-button:hover:not(:disabled) {
+    background: var(--ctp-surface1);
+}
+
+.confirm-button:active:not(:disabled) {
+    background: var(--ctp-surface2);
+}
+
+.confirm-button:disabled {
+    border-color: var(--ctp-overlay0);
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.confirm-button:focus-visible {
+    outline: 2px solid var(--ctp-overlay0);
+    outline-offset: 2px;
+}
+
 .reset-backdrop {
     position: fixed;
     inset: 0;
     z-index: 3;
 }
 
-.size-menu {
+.menu {
     position: relative;
     z-index: 2;
 }
 
-.size-trigger {
+.menu-trigger {
     position: relative;
     z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    min-width: 72px;
     min-height: 38px;
     padding: 6px 8px;
     border: 2.5px solid var(--ctp-overlay0);
@@ -316,14 +454,22 @@ body {
     cursor: pointer;
 }
 
-.size-trigger:focus-visible {
+.menu-trigger:focus-visible {
     outline: 2px solid var(--ctp-overlay0);
     outline-offset: 2px;
 }
 
-.size-trigger:disabled {
+.menu-trigger:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.size-trigger {
+    min-width: 72px;
+}
+
+.rule-trigger {
+    min-width: 96px;
 }
 
 .chevron {
@@ -335,17 +481,17 @@ body {
     transition: transform 120ms ease;
 }
 
-.size-trigger.open .chevron {
+.menu-trigger.open .chevron {
     transform: rotate(225deg) translateY(-2px);
 }
 
-.size-backdrop {
+.menu-backdrop {
     position: fixed;
     inset: 0;
     z-index: 1;
 }
 
-.size-options {
+.menu-options {
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
@@ -360,7 +506,12 @@ body {
     box-shadow: none;
 }
 
-.size-option {
+.rule-options {
+    left: 0;
+    right: auto;
+}
+
+.menu-option {
     padding: 6px 8px;
     border: 0;
     border-radius: 6px;
@@ -370,19 +521,20 @@ body {
     font-size: 0.85rem;
     text-align: left;
     cursor: pointer;
+    white-space: nowrap;
 }
 
-.size-option:hover {
+.menu-option:hover {
     background: var(--ctp-surface1);
     color: var(--ctp-text);
 }
 
-.size-option.selected {
+.menu-option.selected {
     background: var(--ctp-surface2);
     color: var(--ctp-text);
 }
 
-.size-option:focus-visible {
+.menu-option:focus-visible {
     outline: none;
     background: var(--ctp-surface1);
     color: var(--ctp-text);
