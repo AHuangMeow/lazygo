@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use lazygo::game::{star_points, Game, Rules, Stone, BOARD_SIZES};
+use lazygo::session::PendingMove;
 
 use crate::APP_ICON;
 
@@ -9,13 +10,6 @@ const STONE_OUTER_RADIUS: f64 = 0.46;
 const STONE_INNER_RADIUS: f64 = 0.40;
 const MOVE_DOT_RADIUS: f64 = 0.12;
 const PENDING_FRAME_RADIUS: f64 = 0.54;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PendingMove {
-    pub x: usize,
-    pub y: usize,
-    pub legal: bool,
-}
 
 fn stone_classes(stone: Stone) -> (&'static str, &'static str, &'static str) {
     match stone {
@@ -82,7 +76,7 @@ pub fn Board(
                     y2: "{max}",
                 }
             }
-            for (x, y) in stars {
+            for &(x, y) in stars {
                 circle {
                     class: "board-star",
                     cx: "{x}",
@@ -325,12 +319,12 @@ pub fn KomiField(value: String, locked: bool, on_input: EventHandler<String>) ->
 #[component]
 pub fn SizeMenu(
     size: usize,
-    initial: bool,
+    locked: bool,
     open: bool,
     on_toggle: EventHandler<()>,
     on_select: EventHandler<usize>,
 ) -> Element {
-    let expanded = open && initial;
+    let expanded = open && !locked;
 
     rsx! {
         div { class: "menu size-menu",
@@ -339,7 +333,7 @@ pub fn SizeMenu(
                 r#type: "button",
                 aria_label: "Board size",
                 aria_expanded: if expanded { "true" } else { "false" },
-                disabled: !initial,
+                disabled: locked,
                 onclick: move |_| on_toggle.call(()),
                 span { "{size}x{size}" }
                 span { class: "chevron" }

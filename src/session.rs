@@ -1,0 +1,286 @@
+use crate::game::{Game, Rules, DEFAULT_SIZE};
+
+pub const DEFAULT_KOMI: &str = "6.5";
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PendingMove {
+    pub x: usize,
+    pub y: usize,
+    pub legal: bool,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Session {
+    game: Game,
+    pending: Option<PendingMove>,
+    size_open: bool,
+    rule_open: bool,
+    reset_armed: bool,
+    reset_rotation: i32,
+    komi: String,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self {
+            game: Game::new(DEFAULT_SIZE),
+            pending: None,
+            size_open: false,
+            rule_open: false,
+            reset_armed: false,
+            reset_rotation: 0,
+            komi: DEFAULT_KOMI.to_string(),
+        }
+    }
+
+    pub fn game(&self) -> &Game {
+        &self.game
+    }
+
+    pub fn pending(&self) -> Option<PendingMove> {
+        self.pending
+    }
+
+    pub fn size_open(&self) -> bool {
+        self.size_open
+    }
+
+    pub fn rule_open(&self) -> bool {
+        self.rule_open
+    }
+
+    pub fn reset_armed(&self) -> bool {
+        self.reset_armed
+    }
+
+    pub fn reset_rotation(&self) -> i32 {
+        self.reset_rotation
+    }
+
+    pub fn komi(&self) -> &str {
+        &self.komi
+    }
+
+    pub fn settings_locked(&self) -> bool {
+        !self.game.is_initial()
+    }
+
+    pub fn can_confirm(&self) -> bool {
+        self.pending.is_some_and(|pending| pending.legal)
+    }
+
+    pub fn select(&mut self, x: usize, y: usize) {
+        if self
+            .pending
+            .is_some_and(|pending| pending.x == x && pending.y == y)
+        {
+            self.pending = None;
+        } else if self.game.stone_at(x, y).is_none() {
+            let legal = self.game.play(x, y).is_some();
+            self.pending = Some(PendingMove { x, y, legal });
+        }
+    }
+
+    pub fn confirm(&mut self) {
+        let Some(pending) = self.pending else {
+            return;
+        };
+
+        if !pending.legal {
+            return;
+        }
+
+        self.pending = None;
+
+        if let Some(next) = self.game.play(pending.x, pending.y) {
+            self.game = next;
+        }
+
+        self.dismiss_overlays();
+    }
+
+    pub fn pass(&mut self) {
+        self.game = self.game.pass();
+        self.pending = None;
+        self.dismiss_overlays();
+    }
+
+    pub fn undo(&mut self) {
+        if let Some(next) = self.game.undo() {
+            self.game = next;
+            self.pending = None;
+            self.dismiss_overlays();
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some(next) = self.game.redo() {
+            self.game = next;
+            self.pending = None;
+            self.dismiss_overlays();
+        }
+    }
+
+    pub fn toggle_reset(&mut self) {
+        self.reset_rotation += 360;
+        self.size_open = false;
+        self.rule_open = false;
+
+        if self.reset_armed {
+            self.game = Game::with_rules(self.game.size(), self.game.rules());
+            self.pending = None;
+            self.reset_armed = false;
+        } else {
+            self.reset_armed = true;
+        }
+    }
+
+    pub fn cancel_reset(&mut self) {
+        self.reset_armed = false;
+        self.reset_rotation -= 360;
+    }
+
+    pub fn set_size(&mut self, size: usize) {
+        if self.settings_locked() {
+            return;
+        }
+
+        if size != self.game.size() {
+            self.game = Game::with_rules(size, self.game.rules());
+            self.pending = None;
+        }
+
+        self.dismiss_overlays();
+    }
+
+    pub fn set_rules(&mut self, rules: Rules) {
+        if self.settings_locked() {
+            return;
+        }
+
+        if rules != self.game.rules() {
+            self.game = Game::with_rules(self.game.size(), rules);
+            self.pending = None;
+        }
+
+        self.dismiss_overlays();
+    }
+
+    pub fn toggle_size_menu(&mut self) {
+        if self.settings_locked() {
+            return;
+        }
+
+        self.rule_open = false;
+        self.size_open = !self.size_open;
+    }
+
+    pub fn toggle_rule_menu(&mut self) {
+        if self.settings_locked() {
+            return;
+        }
+
+        self.size_open = false;
+        self.rule_open = !self.rule_open;
+    }
+
+    pub fn set_komi(&mut self, komi: String) {
+        if self.settings_locked() {
+            return;
+        }
+
+        self.komi = komi;
+    }
+
+    fn dismiss_overlays(&mut self) {
+        self.size_open = false;
+        self.rule_open = false;
+        self.reset_armed = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Stone;
+
+    #[test]
+    fn staged_move_confirms_and_locks_settings() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        assert!(session.pending().is_some());
+        assert!(session.can_confirm());
+        assert!(!session.settings_locked());
+
+        session.confirm();
+
+        assert_eq!(session.game().stone_at(4, 4), Some(Stone::Black));
+        assert!(session.pending().is_none());
+        assert!(session.settings_locked());
+    }
+
+    #[test]
+    fn tapping_the_same_point_cancels() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.select(4, 4);
+
+        assert!(session.pending().is_none());
+        assert!(!session.can_confirm());
+    }
+
+    #[test]
+    fn rules_and_size_are_preserved_until_reset() {
+        let mut session = Session::new();
+
+        session.set_rules(Rules::Japanese);
+        session.set_size(13);
+
+        assert_eq!(session.game().rules(), Rules::Japanese);
+        assert_eq!(session.game().size(), 13);
+
+        session.select(6, 6);
+        session.confirm();
+        session.toggle_reset();
+        session.toggle_reset();
+
+        assert!(session.game().is_initial());
+        assert_eq!(session.game().rules(), Rules::Japanese);
+        assert_eq!(session.game().size(), 13);
+    }
+
+    #[test]
+    fn settings_cannot_change_after_the_first_move() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.confirm();
+        session.set_rules(Rules::Ing);
+        session.set_size(19);
+        session.set_komi("7.5".to_string());
+
+        assert_eq!(session.game().rules(), Rules::Chinese);
+        assert_eq!(session.game().size(), 9);
+        assert_eq!(session.komi(), "6.5");
+    }
+
+    #[test]
+    fn starting_a_new_rule_selection_clears_pending() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.set_rules(Rules::Ing);
+
+        assert!(session.pending().is_none());
+        assert!(session.game().is_initial());
+        assert_eq!(session.game().rules(), Rules::Ing);
+    }
+}
