@@ -9,6 +9,12 @@ pub enum Rules {
     Ing,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum KoRule {
+    Simple,
+    Positional,
+}
+
 impl Rules {
     pub const ALL: [Self; 3] = [Self::Chinese, Self::Japanese, Self::Ing];
 
@@ -17,6 +23,17 @@ impl Rules {
             Self::Chinese => "中国",
             Self::Japanese => "日韩",
             Self::Ing => "应氏",
+        }
+    }
+
+    fn allows_suicide(self) -> bool {
+        self == Self::Ing
+    }
+
+    fn ko_rule(self) -> KoRule {
+        match self {
+            Self::Japanese => KoRule::Simple,
+            Self::Chinese | Self::Ing => KoRule::Positional,
         }
     }
 }
@@ -37,15 +54,115 @@ impl Stone {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct State {
+struct Board {
+    size: usize,
     stones: Vec<Option<Stone>>,
+}
+
+impl Board {
+    fn new(size: usize) -> Self {
+        Self {
+            size,
+            stones: vec![None; size * size],
+        }
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn len(&self) -> usize {
+        self.stones.len()
+    }
+
+    fn index(&self, x: usize, y: usize) -> Option<usize> {
+        (x < self.size && y < self.size).then_some(y * self.size + x)
+    }
+
+    fn get(&self, x: usize, y: usize) -> Option<Stone> {
+        self.index(x, y).and_then(|index| self.stones[index])
+    }
+
+    fn get_index(&self, index: usize) -> Option<Stone> {
+        self.stones[index]
+    }
+
+    fn set(&mut self, index: usize, stone: Option<Stone>) {
+        self.stones[index] = stone;
+    }
+
+    fn remove(&mut self, group: &[usize]) {
+        for &index in group {
+            self.stones[index] = None;
+        }
+    }
+
+    fn neighbors(&self, index: usize) -> Vec<usize> {
+        let x = index % self.size;
+        let y = index / self.size;
+        let mut result = Vec::with_capacity(4);
+
+        if x > 0 {
+            result.push(index - 1);
+        }
+        if x + 1 < self.size {
+            result.push(index + 1);
+        }
+        if y > 0 {
+            result.push(index - self.size);
+        }
+        if y + 1 < self.size {
+            result.push(index + self.size);
+        }
+
+        result
+    }
+
+    fn group_and_liberties(&self, start: usize) -> (Vec<usize>, usize) {
+        let color = self.stones[start];
+        let mut group = Vec::new();
+        let mut stack = vec![start];
+        let mut seen = vec![false; self.len()];
+        let mut liberty_seen = vec![false; self.len()];
+        let mut liberties = 0;
+
+        while let Some(index) = stack.pop() {
+            if seen[index] {
+                continue;
+            }
+
+            seen[index] = true;
+            group.push(index);
+
+            for neighbor in self.neighbors(index) {
+                match self.stones[neighbor] {
+                    None => {
+                        if !liberty_seen[neighbor] {
+                            liberty_seen[neighbor] = true;
+                            liberties += 1;
+                        }
+                    }
+                    Some(stone) if Some(stone) == color && !seen[neighbor] => {
+                        stack.push(neighbor);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        (group, liberties)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct State {
+    board: Board,
     turn: Stone,
     last_move: Option<(usize, usize)>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Game {
-    size: usize,
     rules: Rules,
     states: Vec<State>,
     cursor: usize,
@@ -57,13 +174,10 @@ impl Game {
     }
 
     pub fn with_rules(size: usize, rules: Rules) -> Self {
-        let stones = vec![None; size * size];
-
         Self {
-            size,
             rules,
             states: vec![State {
-                stones,
+                board: Board::new(size),
                 turn: Stone::Black,
                 last_move: None,
             }],
@@ -76,7 +190,7 @@ impl Game {
     }
 
     pub fn size(&self) -> usize {
-        self.size
+        self.current().board.size()
     }
 
     pub fn rules(&self) -> Rules {
@@ -92,11 +206,7 @@ impl Game {
     }
 
     pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {
-        if x >= self.size || y >= self.size {
-            return None;
-        }
-
-        self.current().stones[y * self.size + x]
+        self.current().board.get(x, y)
     }
 
     pub fn is_initial(&self) -> bool {
@@ -132,66 +242,59 @@ impl Game {
     }
 
     pub fn play(&self, x: usize, y: usize) -> Option<Self> {
-        if x >= self.size || y >= self.size {
-            return None;
-        }
-
         let current = self.current();
-        let index = y * self.size + x;
+        let index = current.board.index(x, y)?;
 
-        if current.stones[index].is_some() {
+        if current.board.get_index(index).is_some() {
             return None;
         }
 
         let color = current.turn;
         let opponent = color.other();
-        let mut stones = current.stones.clone();
-        stones[index] = Some(color);
-        let mut visited = vec![false; self.size * self.size];
+        let mut board = current.board.clone();
+        board.set(index, Some(color));
+        let mut visited = vec![false; board.len()];
 
-        for neighbor in neighbors(index, self.size) {
+        for neighbor in board.neighbors(index) {
             if visited[neighbor] {
                 continue;
             }
 
-            if stones[neighbor] == Some(opponent) {
-                let (group, liberties) = group_and_liberties(&stones, self.size, neighbor);
+            if board.get_index(neighbor) == Some(opponent) {
+                let (group, liberties) = board.group_and_liberties(neighbor);
 
-                for member in &group {
-                    visited[*member] = true;
+                for &member in &group {
+                    visited[member] = true;
                 }
 
                 if liberties == 0 {
-                    for member in group {
-                        stones[member] = None;
-                    }
+                    board.remove(&group);
                 }
             }
         }
 
-        let (group, liberties) = group_and_liberties(&stones, self.size, index);
+        let (group, liberties) = board.group_and_liberties(index);
         let self_capture = liberties == 0;
 
-        if self_capture && self.rules != Rules::Ing {
+        if self_capture && !self.rules.allows_suicide() {
             return None;
         }
 
         let pass_like = self_capture && self.rules == Rules::Ing && group.len() == 1;
 
         if self_capture {
-            for member in group {
-                stones[member] = None;
-            }
+            board.remove(&group);
         }
 
-        let repeats = if self.rules == Rules::Japanese {
-            self.cursor > 0 && self.states[self.cursor - 1].stones == stones
-        } else if pass_like {
+        let repeats = if pass_like {
             false
         } else {
-            self.states[..=self.cursor]
-                .iter()
-                .any(|state| state.stones == stones)
+            match self.rules.ko_rule() {
+                KoRule::Simple => self.cursor > 0 && self.states[self.cursor - 1].board == board,
+                KoRule::Positional => self.states[..=self.cursor]
+                    .iter()
+                    .any(|state| state.board == board),
+            }
         };
 
         if repeats {
@@ -201,7 +304,7 @@ impl Game {
         let mut next = self.clone();
         next.states.truncate(self.cursor + 1);
         next.states.push(State {
-            stones,
+            board,
             turn: opponent,
             last_move: if self_capture { None } else { Some((x, y)) },
         });
@@ -214,7 +317,7 @@ impl Game {
         let mut next = self.clone();
         next.states.truncate(self.cursor + 1);
         next.states.push(State {
-            stones: current.stones.clone(),
+            board: current.board.clone(),
             turn: current.turn.other(),
             last_move: None,
         });
@@ -223,84 +326,46 @@ impl Game {
     }
 }
 
-pub fn star_points(size: usize) -> Vec<(usize, usize)> {
+const STAR_POINTS_9: [(usize, usize); 5] = [(2, 2), (2, 6), (4, 4), (6, 2), (6, 6)];
+const STAR_POINTS_13: [(usize, usize); 5] = [(3, 3), (3, 9), (6, 6), (9, 3), (9, 9)];
+const STAR_POINTS_19: [(usize, usize); 9] = [
+    (3, 3),
+    (3, 9),
+    (3, 15),
+    (9, 3),
+    (9, 9),
+    (9, 15),
+    (15, 3),
+    (15, 9),
+    (15, 15),
+];
+
+pub fn star_points(size: usize) -> &'static [(usize, usize)] {
     match size {
-        9 => vec![(2, 2), (2, 6), (4, 4), (6, 2), (6, 6)],
-        13 => vec![(3, 3), (3, 9), (6, 6), (9, 3), (9, 9)],
-        19 => vec![
-            (3, 3),
-            (3, 9),
-            (3, 15),
-            (9, 3),
-            (9, 9),
-            (9, 15),
-            (15, 3),
-            (15, 9),
-            (15, 15),
-        ],
-        _ => Vec::new(),
+        9 => &STAR_POINTS_9,
+        13 => &STAR_POINTS_13,
+        19 => &STAR_POINTS_19,
+        _ => &[],
     }
-}
-
-fn neighbors(index: usize, size: usize) -> Vec<usize> {
-    let x = index % size;
-    let y = index / size;
-    let mut result = Vec::with_capacity(4);
-
-    if x > 0 {
-        result.push(index - 1);
-    }
-    if x + 1 < size {
-        result.push(index + 1);
-    }
-    if y > 0 {
-        result.push(index - size);
-    }
-    if y + 1 < size {
-        result.push(index + size);
-    }
-
-    result
-}
-
-fn group_and_liberties(stones: &[Option<Stone>], size: usize, start: usize) -> (Vec<usize>, usize) {
-    let color = stones[start];
-    let mut group = Vec::new();
-    let mut stack = vec![start];
-    let mut seen = vec![false; stones.len()];
-    let mut liberty_seen = vec![false; stones.len()];
-    let mut liberties = 0;
-
-    while let Some(index) = stack.pop() {
-        if seen[index] {
-            continue;
-        }
-
-        seen[index] = true;
-        group.push(index);
-
-        for neighbor in neighbors(index, size) {
-            match stones[neighbor] {
-                None => {
-                    if !liberty_seen[neighbor] {
-                        liberty_seen[neighbor] = true;
-                        liberties += 1;
-                    }
-                }
-                Some(stone) if Some(stone) == color && !seen[neighbor] => {
-                    stack.push(neighbor);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    (group, liberties)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn board(size: usize, black: &[(usize, usize)], white: &[(usize, usize)]) -> Board {
+        let mut board = Board::new(size);
+
+        for &(x, y) in black {
+            board.set(board.index(x, y).unwrap(), Some(Stone::Black));
+        }
+
+        for &(x, y) in white {
+            board.set(board.index(x, y).unwrap(), Some(Stone::White));
+        }
+
+        board
+    }
 
     fn state(
         size: usize,
@@ -308,18 +373,8 @@ mod tests {
         white: &[(usize, usize)],
         turn: Stone,
     ) -> State {
-        let mut stones = vec![None; size * size];
-
-        for &(x, y) in black {
-            stones[y * size + x] = Some(Stone::Black);
-        }
-
-        for &(x, y) in white {
-            stones[y * size + x] = Some(Stone::White);
-        }
-
         State {
-            stones,
+            board: board(size, black, white),
             turn,
             last_move: None,
         }
@@ -342,7 +397,6 @@ mod tests {
         rules: Rules,
     ) -> Game {
         Game {
-            size,
             rules,
             states: vec![state(size, black, white, turn)],
             cursor: 0,
@@ -351,7 +405,6 @@ mod tests {
 
     fn ko_game(rules: Rules) -> Game {
         Game {
-            size: 5,
             rules,
             states: vec![
                 state(
@@ -375,12 +428,12 @@ mod tests {
         let mut game = ko_game(rules);
         let captured = game.states[1].clone();
         game.states.push(State {
-            stones: captured.stones.clone(),
+            board: captured.board.clone(),
             turn: Stone::Black,
             last_move: None,
         });
         game.states.push(State {
-            stones: captured.stones,
+            board: captured.board,
             turn: Stone::White,
             last_move: None,
         });
@@ -493,20 +546,16 @@ mod tests {
 
     #[test]
     fn rejects_positional_superko() {
-        let mut repeated = vec![None; 9];
-        repeated[4] = Some(Stone::Black);
-
         let game = Game {
-            size: 3,
             rules: Rules::Chinese,
             states: vec![
                 State {
-                    stones: repeated,
+                    board: board(3, &[(1, 1)], &[]),
                     turn: Stone::White,
                     last_move: None,
                 },
                 State {
-                    stones: vec![None; 9],
+                    board: Board::new(3),
                     turn: Stone::Black,
                     last_move: None,
                 },
