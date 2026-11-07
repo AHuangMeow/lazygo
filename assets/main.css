@@ -6,7 +6,6 @@
     --ctp-text: #cdd6f4;
     --ctp-subtext0: #a6adc8;
     --ctp-overlay0: #6c7086;
-    --ctp-overlay1: #7f849c;
     --ctp-overlay2: #9399b2;
     --ctp-base: #1e1e2e;
     --ctp-red: #f38ba8;
@@ -192,14 +191,18 @@ body {
     stroke: var(--ctp-red);
 }
 
+.board-footer,
+.board-settings {
+    margin-left: calc(var(--footer-margin) - var(--board-margin, 24px));
+    margin-right: calc(var(--footer-margin) - var(--board-margin, 24px));
+}
+
 .board-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     margin-top: var(--board-margin, 14px);
-    margin-left: calc(var(--footer-margin) - var(--board-margin, 24px));
-    margin-right: calc(var(--footer-margin) - var(--board-margin, 24px));
     border-top: 2.5px solid var(--ctp-overlay0);
     padding-top: 16px;
 }
@@ -216,8 +219,6 @@ body {
     justify-content: space-between;
     gap: 12px;
     margin-top: 10px;
-    margin-left: calc(var(--footer-margin) - var(--board-margin, 24px));
-    margin-right: calc(var(--footer-margin) - var(--board-margin, 24px));
 }
 
 .settings-group {
@@ -314,8 +315,8 @@ body {
     fill: var(--ctp-text);
 }
 
-.reset-button {
-    position: relative;
+.reset-button,
+.history-button {
     display: grid;
     place-items: center;
     width: 38px;
@@ -327,6 +328,11 @@ body {
     color: var(--ctp-subtext0);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    transition: color 200ms ease;
+}
+
+.reset-button {
+    position: relative;
     transition: transform 320ms ease, color 200ms ease;
 }
 
@@ -358,21 +364,6 @@ body {
 
 .reset-button.armed .reset-icon {
     fill: var(--ctp-red);
-}
-
-.history-button {
-    display: grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    border: 2.5px solid var(--ctp-overlay0);
-    border-radius: 50%;
-    background: transparent;
-    color: var(--ctp-subtext0);
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: color 200ms ease;
 }
 
 .history-button:hover:not(:disabled) {
@@ -510,7 +501,6 @@ body {
     border: 2.5px solid var(--ctp-overlay0);
     border-radius: 10px;
     background: var(--ctp-surface0);
-    box-shadow: none;
 }
 
 .rule-options {

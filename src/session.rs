@@ -76,6 +76,10 @@ impl Session {
     }
 
     pub fn select(&mut self, x: usize, y: usize) {
+        if x >= self.game.size() || y >= self.game.size() {
+            return;
+        }
+
         if self
             .pending
             .is_some_and(|pending| pending.x == x && pending.y == y)
@@ -224,6 +228,15 @@ mod tests {
         assert_eq!(session.game().stone_at(4, 4), Some(Stone::Black));
         assert!(session.pending().is_none());
         assert!(session.settings_locked());
+    }
+
+    #[test]
+    fn ignores_out_of_bounds_points() {
+        let mut session = Session::new();
+
+        session.select(9, 9);
+
+        assert!(session.pending().is_none());
     }
 
     #[test]
