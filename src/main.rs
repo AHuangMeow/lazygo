@@ -216,6 +216,7 @@ fn App() -> Element {
     let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
     let initial = is_initial(&current);
     let star_radius = 40.0 / 304.0;
+    let hit_radius = 0.36;
     let stars = star_points(size);
     let (back, front) = match current.turn {
         Stone::Black => ((43.0, Stone::White), (21.0, Stone::Black)),
@@ -318,7 +319,7 @@ fn App() -> Element {
                                     class: "board-hit",
                                     cx: "{x}",
                                     cy: "{y}",
-                                    r: "0.48",
+                                    r: "{hit_radius}",
                                     onclick: move |_| {
                                         let position = game();
 
