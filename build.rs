@@ -31,7 +31,7 @@ fn main() {
         }
 
         if let Some(manifest) = res_dir.parent().map(|dir| dir.join("AndroidManifest.xml")) {
-            set_landscape(&manifest);
+            set_portrait(&manifest);
             println!("cargo:rerun-if-changed={}", manifest.display());
         }
     }
@@ -45,7 +45,7 @@ fn main() {
     }
 }
 
-fn set_landscape(manifest: &Path) {
+fn set_portrait(manifest: &Path) {
     let contents = match fs::read_to_string(manifest) {
         Ok(contents) => contents,
         Err(_) => return,
@@ -56,7 +56,8 @@ fn set_landscape(manifest: &Path) {
     }
 
     let marker = r#"android:name="dev.dioxus.main.MainActivity""#;
-    let replacement = r#"android:name="dev.dioxus.main.MainActivity" android:screenOrientation="sensorLandscape""#;
+    let replacement =
+        r#"android:name="dev.dioxus.main.MainActivity" android:screenOrientation="portrait""#;
     let updated = contents.replacen(marker, replacement, 1);
 
     if updated != contents {

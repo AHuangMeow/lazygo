@@ -1,3 +1,11 @@
+:root {
+    --ctp-surface0: #313244;
+    --ctp-surface1: #45475a;
+    --ctp-surface2: #585b70;
+    --ctp-text: #cdd6f4;
+    --ctp-subtext0: #a6adc8;
+}
+
 *,
 *::before,
 *::after {
@@ -14,9 +22,9 @@ body,
 }
 
 body {
-    background: #fff;
-    color: #000;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--ctp-surface1);
+    color: var(--ctp-text);
+    font-family: "Maiyuan II", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -25,4 +33,83 @@ body {
     flex-direction: column;
     width: 100%;
     min-height: 100%;
+    background: var(--ctp-surface1);
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    height: 64px;
+    padding: 0 16px 0 20px;
+    background: var(--ctp-surface0);
+    border-bottom: 1px solid var(--ctp-surface2);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.brand-icon {
+    display: block;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    flex: none;
+}
+
+.brand-name {
+    color: var(--ctp-text);
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+}
+
+.menu-button {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--ctp-subtext0);
+    cursor: pointer;
+    flex: none;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.menu-button:hover {
+    background: var(--ctp-surface1);
+    color: var(--ctp-text);
+}
+
+.menu-button:active {
+    background: var(--ctp-surface2);
+}
+
+.menu-button:focus-visible {
+    outline: 2px solid var(--ctp-text);
+    outline-offset: 2px;
+    background: var(--ctp-surface1);
+    color: var(--ctp-text);
+}
+
+.menu-icon {
+    display: block;
+    width: 28px;
+    height: 28px;
+    fill: currentColor;
+}
+
+.content {
+    flex: 1;
+    min-height: 0;
 }
