@@ -41,7 +41,7 @@ fn App() -> Element {
     );
 
     rsx! {
-        document::Style { "{font_face}" }
+        style { "{font_face}" }
         document::Stylesheet { href: MAIN_CSS }
         main { class: "page",
             header { class: "topbar",
