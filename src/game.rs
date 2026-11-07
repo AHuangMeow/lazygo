@@ -1,6 +1,26 @@
 pub const BOARD_SIZES: [usize; 3] = [9, 13, 19];
 pub const DEFAULT_SIZE: usize = 9;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Rules {
+    #[default]
+    Chinese,
+    Japanese,
+    Ing,
+}
+
+impl Rules {
+    pub const ALL: [Self; 3] = [Self::Chinese, Self::Japanese, Self::Ing];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Chinese => "中国",
+            Self::Japanese => "日韩",
+            Self::Ing => "应氏",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stone {
     Black,
@@ -26,16 +46,22 @@ struct State {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Game {
     size: usize,
+    rules: Rules,
     states: Vec<State>,
     cursor: usize,
 }
 
 impl Game {
     pub fn new(size: usize) -> Self {
+        Self::with_rules(size, Rules::default())
+    }
+
+    pub fn with_rules(size: usize, rules: Rules) -> Self {
         let stones = vec![None; size * size];
 
         Self {
             size,
+            rules,
             states: vec![State {
                 stones,
                 turn: Stone::Black,
@@ -51,6 +77,10 @@ impl Game {
 
     pub fn size(&self) -> usize {
         self.size
+    }
+
+    pub fn rules(&self) -> Rules {
+        self.rules
     }
 
     pub fn turn(&self) -> Stone {
@@ -139,13 +169,32 @@ impl Game {
             }
         }
 
-        let (_, liberties) = group_and_liberties(&stones, self.size, index);
+        let (group, liberties) = group_and_liberties(&stones, self.size, index);
+        let self_capture = liberties == 0;
 
-        if liberties == 0
-            || self.states[..=self.cursor]
+        if self_capture && self.rules != Rules::Ing {
+            return None;
+        }
+
+        let pass_like = self_capture && self.rules == Rules::Ing && group.len() == 1;
+
+        if self_capture {
+            for member in group {
+                stones[member] = None;
+            }
+        }
+
+        let repeats = if self.rules == Rules::Japanese {
+            self.cursor > 0 && self.states[self.cursor - 1].stones == stones
+        } else if pass_like {
+            false
+        } else {
+            self.states[..=self.cursor]
                 .iter()
                 .any(|state| state.stones == stones)
-        {
+        };
+
+        if repeats {
             return None;
         }
 
@@ -154,7 +203,7 @@ impl Game {
         next.states.push(State {
             stones,
             turn: opponent,
-            last_move: Some((x, y)),
+            last_move: if self_capture { None } else { Some((x, y)) },
         });
         next.cursor += 1;
         Some(next)
@@ -238,10 +287,8 @@ fn group_and_liberties(stones: &[Option<Stone>], size: usize, start: usize) -> (
                         liberties += 1;
                     }
                 }
-                Some(stone) if Some(stone) == color => {
-                    if !seen[neighbor] {
-                        stack.push(neighbor);
-                    }
+                Some(stone) if Some(stone) == color && !seen[neighbor] => {
+                    stack.push(neighbor);
                 }
                 _ => {}
             }
@@ -255,12 +302,12 @@ fn group_and_liberties(stones: &[Option<Stone>], size: usize, start: usize) -> (
 mod tests {
     use super::*;
 
-    fn position(
+    fn state(
         size: usize,
         black: &[(usize, usize)],
         white: &[(usize, usize)],
         turn: Stone,
-    ) -> Game {
+    ) -> State {
         let mut stones = vec![None; size * size];
 
         for &(x, y) in black {
@@ -271,15 +318,74 @@ mod tests {
             stones[y * size + x] = Some(Stone::White);
         }
 
+        State {
+            stones,
+            turn,
+            last_move: None,
+        }
+    }
+
+    fn position(
+        size: usize,
+        black: &[(usize, usize)],
+        white: &[(usize, usize)],
+        turn: Stone,
+    ) -> Game {
+        position_with_rules(size, black, white, turn, Rules::default())
+    }
+
+    fn position_with_rules(
+        size: usize,
+        black: &[(usize, usize)],
+        white: &[(usize, usize)],
+        turn: Stone,
+        rules: Rules,
+    ) -> Game {
         Game {
             size,
-            states: vec![State {
-                stones,
-                turn,
-                last_move: None,
-            }],
+            rules,
+            states: vec![state(size, black, white, turn)],
             cursor: 0,
         }
+    }
+
+    fn ko_game(rules: Rules) -> Game {
+        Game {
+            size: 5,
+            rules,
+            states: vec![
+                state(
+                    5,
+                    &[(0, 1), (1, 0), (1, 2)],
+                    &[(2, 0), (1, 1), (2, 2), (3, 1)],
+                    Stone::Black,
+                ),
+                state(
+                    5,
+                    &[(0, 1), (1, 0), (1, 2), (2, 1)],
+                    &[(2, 0), (2, 2), (3, 1)],
+                    Stone::White,
+                ),
+            ],
+            cursor: 1,
+        }
+    }
+
+    fn ko_game_after_passes(rules: Rules) -> Game {
+        let mut game = ko_game(rules);
+        let captured = game.states[1].clone();
+        game.states.push(State {
+            stones: captured.stones.clone(),
+            turn: Stone::Black,
+            last_move: None,
+        });
+        game.states.push(State {
+            stones: captured.stones,
+            turn: Stone::White,
+            last_move: None,
+        });
+        game.cursor = 3;
+        game
     }
 
     #[test]
@@ -287,6 +393,7 @@ mod tests {
         let game = Game::new(9);
 
         assert_eq!(game.size(), 9);
+        assert_eq!(game.rules(), Rules::Chinese);
         assert_eq!(game.turn(), Stone::Black);
         assert_eq!(game.last_move(), None);
         assert!(game.is_initial());
@@ -335,10 +442,53 @@ mod tests {
     }
 
     #[test]
-    fn rejects_suicide() {
-        let game = position(3, &[(0, 1), (2, 1), (1, 0), (1, 2)], &[], Stone::White);
+    fn rejects_suicide_in_chinese_and_japanese_rules() {
+        for rules in [Rules::Chinese, Rules::Japanese] {
+            let game = position_with_rules(
+                3,
+                &[(0, 1), (2, 1), (1, 0), (1, 2)],
+                &[],
+                Stone::White,
+                rules,
+            );
 
-        assert!(game.play(1, 1).is_none());
+            assert!(game.play(1, 1).is_none());
+        }
+    }
+
+    #[test]
+    fn ing_allows_single_stone_suicide_as_pass() {
+        let game = position_with_rules(
+            3,
+            &[(0, 1), (2, 1), (1, 0), (1, 2)],
+            &[],
+            Stone::White,
+            Rules::Ing,
+        );
+        let game = game.play(1, 1).unwrap();
+
+        assert_eq!(game.stone_at(1, 1), None);
+        assert_eq!(game.turn(), Stone::Black);
+        assert_eq!(game.last_move(), None);
+        assert!(!game.is_initial());
+    }
+
+    #[test]
+    fn ing_allows_multi_stone_suicide() {
+        let game = position_with_rules(
+            3,
+            &[(0, 0), (0, 1), (2, 0), (2, 1), (1, 2)],
+            &[(1, 1)],
+            Stone::White,
+            Rules::Ing,
+        );
+        let game = game.play(1, 0).unwrap();
+
+        assert_eq!(game.stone_at(1, 0), None);
+        assert_eq!(game.stone_at(1, 1), None);
+        assert_eq!(game.stone_at(0, 0), Some(Stone::Black));
+        assert_eq!(game.turn(), Stone::Black);
+        assert_eq!(game.last_move(), None);
     }
 
     #[test]
@@ -348,6 +498,7 @@ mod tests {
 
         let game = Game {
             size: 3,
+            rules: Rules::Chinese,
             states: vec![
                 State {
                     stones: repeated,
@@ -364,6 +515,29 @@ mod tests {
         };
 
         assert!(game.play(1, 1).is_none());
+    }
+
+    #[test]
+    fn ko_recapture_is_illegal_in_every_ruleset() {
+        for rules in Rules::ALL {
+            assert!(ko_game(rules).play(1, 1).is_none());
+        }
+    }
+
+    #[test]
+    fn japanese_simple_ko_lifts_after_passes() {
+        let game = ko_game_after_passes(Rules::Japanese).play(1, 1).unwrap();
+
+        assert_eq!(game.stone_at(1, 1), Some(Stone::White));
+        assert_eq!(game.stone_at(2, 1), None);
+        assert_eq!(game.turn(), Stone::Black);
+    }
+
+    #[test]
+    fn chinese_and_ing_reject_ko_repetition_after_passes() {
+        for rules in [Rules::Chinese, Rules::Ing] {
+            assert!(ko_game_after_passes(rules).play(1, 1).is_none());
+        }
     }
 
     #[test]
@@ -393,6 +567,16 @@ mod tests {
         assert_eq!(game.stone_at(3, 3), Some(Stone::Black));
         assert_eq!(game.stone_at(4, 4), None);
         assert!(!game.can_redo());
+    }
+
+    #[test]
+    fn exposes_rule_labels_and_preserves_selected_rules() {
+        assert_eq!(Rules::default(), Rules::Chinese);
+        assert_eq!(
+            Rules::ALL.map(|rules| rules.label()),
+            ["中国", "日韩", "应氏"]
+        );
+        assert_eq!(Game::with_rules(9, Rules::Ing).rules(), Rules::Ing);
     }
 
     #[test]

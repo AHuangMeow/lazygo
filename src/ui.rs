@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use lazygo::game::{star_points, Game, Stone, BOARD_SIZES};
+use lazygo::game::{star_points, Game, Rules, Stone, BOARD_SIZES};
 
 use crate::APP_ICON;
 
@@ -8,13 +8,14 @@ const HIT_RADIUS: f64 = 0.36;
 const STONE_OUTER_RADIUS: f64 = 0.46;
 const STONE_INNER_RADIUS: f64 = 0.40;
 const MOVE_DOT_RADIUS: f64 = 0.12;
-const PENDING_FRAME_HALF: f64 = 0.52;
-const RULES: [(&str, &str); 3] = [
-    ("chinese", "中国规则"),
-    ("japanese", "日本规则"),
-    ("ing", "应氏规则"),
-];
-pub const DEFAULT_RULE: &str = RULES[0].0;
+const PENDING_FRAME_RADIUS: f64 = 0.54;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct PendingMove {
+    pub x: usize,
+    pub y: usize,
+    pub legal: bool,
+}
 
 fn stone_classes(stone: Stone) -> (&'static str, &'static str, &'static str) {
     match stone {
@@ -53,7 +54,7 @@ fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
 #[component]
 pub fn Board(
     game: Game,
-    pending: Option<(usize, usize)>,
+    pending: Option<PendingMove>,
     on_select: EventHandler<(usize, usize)>,
 ) -> Element {
     let size = game.size();
@@ -94,15 +95,15 @@ pub fn Board(
                     if let Some(stone) = game.stone_at(x, y) {
                         {stone_node(x, y, stone, last_move == Some((x, y)))}
                     }
-                    if pending == Some((x, y)) {
-                        {stone_node(x, y, game.turn(), false)}
-                        rect {
-                            class: "pending-frame",
-                            x: "{x as f64 - PENDING_FRAME_HALF}",
-                            y: "{y as f64 - PENDING_FRAME_HALF}",
-                            width: "{PENDING_FRAME_HALF * 2.0}",
-                            height: "{PENDING_FRAME_HALF * 2.0}",
-                            rx: "0.14",
+                    if let Some(pending) = pending {
+                        if pending.x == x && pending.y == y {
+                            {stone_node(x, y, game.turn(), false)}
+                            circle {
+                                class: if pending.legal { "pending-frame" } else { "pending-frame illegal" },
+                                cx: "{x}",
+                                cy: "{y}",
+                                r: "{PENDING_FRAME_RADIUS}",
+                            }
                         }
                     }
                     circle {
@@ -260,41 +261,38 @@ pub fn ConfirmButton(enabled: bool, on_click: EventHandler<()>) -> Element {
 
 #[component]
 pub fn RuleMenu(
-    value: String,
+    value: Rules,
+    locked: bool,
     open: bool,
     on_toggle: EventHandler<()>,
-    on_select: EventHandler<String>,
+    on_select: EventHandler<Rules>,
 ) -> Element {
-    let label = RULES
-        .iter()
-        .copied()
-        .find(|(key, _)| *key == value.as_str())
-        .map(|(_, label)| label)
-        .unwrap_or(RULES[0].1);
+    let expanded = open && !locked;
 
     rsx! {
         div { class: "menu rule-menu",
             button {
-                class: if open { "menu-trigger rule-trigger open" } else { "menu-trigger rule-trigger" },
+                class: if expanded { "menu-trigger rule-trigger open" } else { "menu-trigger rule-trigger" },
                 r#type: "button",
                 aria_label: "Rules",
-                aria_expanded: if open { "true" } else { "false" },
+                aria_expanded: if expanded { "true" } else { "false" },
+                disabled: locked,
                 onclick: move |_| on_toggle.call(()),
-                span { "{label}" }
+                span { "{value.label()}" }
                 span { class: "chevron" }
             }
-            if open {
+            if expanded {
                 div {
                     class: "menu-backdrop",
                     onclick: move |_| on_toggle.call(()),
                 }
                 div { class: "menu-options rule-options",
-                    for (key, label) in RULES {
+                    for rule in Rules::ALL {
                         button {
-                            class: if value == key { "menu-option selected" } else { "menu-option" },
+                            class: if value == rule { "menu-option selected" } else { "menu-option" },
                             r#type: "button",
-                            onclick: move |_| on_select.call(key.to_string()),
-                            "{label}"
+                            onclick: move |_| on_select.call(rule),
+                            "{rule.label()}"
                         }
                     }
                 }
@@ -304,9 +302,9 @@ pub fn RuleMenu(
 }
 
 #[component]
-pub fn KomiField(value: String, on_input: EventHandler<String>) -> Element {
+pub fn KomiField(value: String, locked: bool, on_input: EventHandler<String>) -> Element {
     rsx! {
-        label { class: "komi-field",
+        label { class: if locked { "komi-field locked" } else { "komi-field" },
             span { class: "komi-label", "贴目" }
             input {
                 class: "komi-input",
@@ -317,6 +315,7 @@ pub fn KomiField(value: String, on_input: EventHandler<String>) -> Element {
                 max: "100",
                 value: "{value}",
                 aria_label: "Komi",
+                disabled: locked,
                 oninput: move |event| on_input.call(event.value()),
             }
         }
