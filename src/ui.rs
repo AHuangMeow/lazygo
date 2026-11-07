@@ -85,6 +85,7 @@ pub fn Board(game: Game, on_play: EventHandler<(usize, usize)>) -> Element {
                     }
                     circle {
                         class: "board-hit",
+                        fill: "none",
                         cx: "{x}",
                         cy: "{y}",
                         r: "{HIT_RADIUS}",

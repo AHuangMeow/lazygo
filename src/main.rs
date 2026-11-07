@@ -5,7 +5,7 @@ mod ui;
 
 use ui::{Board, ResetButton, SizeMenu, Topbar, TurnIndicator};
 
-const MAIN_CSS: Asset = asset!("/assets/main.css");
+const MAIN_CSS: &str = include_str!("../assets/main.css");
 const APP_ICON: Asset = asset!("/assets/icon.png");
 const APP_FONT: Asset = asset!("/assets/fonts/maiyuan-ii-regular.ttf");
 
@@ -29,8 +29,7 @@ fn App() -> Element {
     );
 
     rsx! {
-        style { "{font_face}" }
-        document::Stylesheet { href: MAIN_CSS }
+        style { "{MAIN_CSS}\n{font_face}" }
         main { class: "page",
             Topbar {}
             if reset_armed() {
