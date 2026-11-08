@@ -99,6 +99,10 @@ impl AnalysisController {
         &self.cache
     }
 
+    pub fn has_pending(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
     pub fn cached(&self, query: &AnalysisQuery) -> Option<AnalysisSnapshot> {
         let model_id = self.model_id.as_deref()?;
         let key = AnalysisKey::new(query, model_id);

@@ -565,3 +565,225 @@ body {
     background: var(--ctp-surface1);
     color: var(--ctp-text);
 }
+
+.perspective-toggle {
+    display: grid;
+    place-items: center;
+    width: 65px;
+    height: 50px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.perspective-toggle:focus-visible {
+    outline: 2px solid var(--ctp-overlay0);
+    outline-offset: 2px;
+}
+
+.mode-toggle {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 2.5px solid var(--ctp-overlay0);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ctp-subtext0);
+    cursor: pointer;
+    transition: color 160ms ease;
+}
+
+.mode-toggle:hover {
+    color: var(--ctp-text);
+}
+
+.mode-toggle:focus-visible {
+    outline: 2px solid var(--ctp-overlay0);
+    outline-offset: 2px;
+}
+
+.mode-percent {
+    font-size: 1rem;
+    line-height: 1;
+    color: currentColor;
+}
+
+.mode-score-glyph {
+    display: block;
+    width: 15px;
+    height: 7px;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+}
+
+.board-column {
+    flex: 1;
+    min-height: 0;
+}
+
+.analysis-row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    margin: 12px calc(var(--footer-margin) - var(--board-margin, 24px)) 0;
+}
+
+.analysis-panel {
+    display: flex;
+    flex-direction: column;
+    align-self: flex-start;
+    max-width: 100%;
+    overflow: hidden;
+    border: 2.5px solid var(--ctp-overlay0);
+    border-radius: 12px;
+    background: var(--ctp-surface0);
+}
+
+.analysis-panel.open {
+    align-self: stretch;
+    width: 100%;
+    flex: 1;
+    min-height: 150px;
+}
+
+.analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+    padding: 0 8px 0 4px;
+}
+
+.analysis-panel.open .analysis-header {
+    border-bottom: 2px solid var(--ctp-overlay0);
+}
+
+.analysis-toggle {
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ctp-text);
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.analysis-toggle:hover:not(:disabled) {
+    background: var(--ctp-surface1);
+}
+
+.analysis-toggle:focus-visible {
+    outline: 2px solid var(--ctp-overlay0);
+    outline-offset: 2px;
+}
+
+.analysis-toggle:disabled {
+    color: var(--ctp-overlay0);
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.analysis-depth {
+    color: var(--ctp-overlay2);
+    font-size: 0.72rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.analysis-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.analysis-body {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 4px 6px 8px;
+}
+
+.analysis-chart-svg {
+    display: block;
+    flex: 1;
+    width: 100%;
+    min-height: 110px;
+}
+
+.chart-axis {
+    stroke: var(--ctp-overlay0);
+    stroke-width: 1.1;
+}
+
+.chart-label {
+    fill: var(--ctp-subtext0);
+    font-family: inherit;
+    font-size: 7.5px;
+}
+
+.chart-point {
+    fill: var(--ctp-text);
+    opacity: 0.75;
+}
+
+.chart-current {
+    fill: none;
+    stroke: var(--ctp-text);
+    stroke-width: 1.6;
+}
+
+.chart-value {
+    fill: var(--ctp-text);
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.chart-empty {
+    fill: var(--ctp-subtext0);
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.analysis-status,
+.analysis-error {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    right: 0;
+    color: var(--ctp-overlay2);
+    font-size: 0.75rem;
+    text-align: center;
+    pointer-events: none;
+}
+
+.analysis-error {
+    color: var(--ctp-red);
+}
+
+.ownership-dot.black {
+    fill: var(--ctp-base);
+}
+
+.ownership-dot.white {
+    fill: var(--ctp-text);
+}
+
+.ownership-dot {
+    pointer-events: none;
+}
+
+.indicator-black.dimmed,
+.indicator-white.dimmed {
+    opacity: 0.35;
+}

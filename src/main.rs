@@ -4,8 +4,8 @@ use lazygo::session::Session;
 mod ui;
 
 use ui::{
-    Board, ConfirmButton, HistoryButton, HistoryDirection, KomiField, ResetButton, RuleMenu,
-    SizeMenu, Topbar, TurnIndicator,
+    AnalysisPanel, AnalysisUiState, Board, ConfirmButton, HistoryButton, HistoryDirection,
+    KomiField, ResetButton, RuleMenu, SizeMenu, Topbar, TurnIndicator,
 };
 
 const MAIN_CSS: &str = include_str!("../assets/main.css");
@@ -19,6 +19,18 @@ fn main() {
 #[component]
 fn App() -> Element {
     let mut session = use_signal(Session::new);
+    let mut analysis = use_signal(AnalysisUiState::new);
+
+    use_future(move || async move {
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(120)).await;
+            let state = session.read().clone();
+            if analysis.read().needs_tick(&state) {
+                analysis.with_mut(|analysis| analysis.tick(&state));
+            }
+        }
+    });
+
     let state = session();
     let current = state.game();
     let size = current.size();
@@ -30,6 +42,32 @@ fn App() -> Element {
     let can_undo = current.can_undo();
     let can_redo = current.can_redo();
     let game = current.clone();
+    let current_index = game.moves().len();
+    let (analysis_enabled, analysis_open, perspective, mode, current_snapshot, analysis_error) = {
+        let analysis = analysis.read();
+        (
+            analysis.enabled(),
+            analysis.panel_open(),
+            analysis.perspective(),
+            analysis.mode(),
+            analysis.current().cloned(),
+            analysis.error().map(str::to_string),
+        )
+    };
+    let mut chart = analysis.read().chart(&state);
+    if let Some(snapshot) = current_snapshot.as_ref() {
+        if current_index < chart.len() {
+            chart[current_index] = Some(snapshot.clone());
+        }
+    }
+    let ownership = analysis_open
+        .then(|| {
+            current_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.ownership.clone())
+        })
+        .flatten();
+    let max_visits = analysis.read().max_visits();
     let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
     let font_face = format!(
         r#"@font-face {{ font-family: "Maiyuan II"; src: url("{}") format("truetype"); font-style: normal; font-weight: 400; font-display: swap; }}"#,
@@ -57,6 +95,7 @@ fn App() -> Element {
                     Board {
                         game,
                         pending,
+                        ownership,
                         on_select: move |(x, y)| session.write().select(x, y),
                     }
                     div { class: "board-footer",
@@ -108,6 +147,22 @@ fn App() -> Element {
                             open: state.size_open(),
                             on_toggle: move |_| session.write().toggle_size_menu(),
                             on_select: move |size| session.write().set_size(size),
+                        }
+                    }
+                    div { class: "analysis-row",
+                        AnalysisPanel {
+                            open: analysis_open,
+                            enabled: analysis_enabled,
+                            perspective,
+                            mode,
+                            current: current_snapshot,
+                            error: analysis_error,
+                            chart,
+                            current_index,
+                            max_visits,
+                            on_toggle: move |_| analysis.write().toggle_panel(),
+                            on_perspective: move |_| analysis.write().toggle_perspective(),
+                            on_mode: move |_| analysis.write().toggle_mode(),
                         }
                     }
                 }

@@ -4,6 +4,10 @@ use lazygo::game::Stone;
 use crate::APP_ICON;
 
 fn indicator_stone(x: f64, stone: Stone, visible: bool) -> Element {
+    indicator_stone_dim(x, stone, visible, false)
+}
+
+fn indicator_stone_dim(x: f64, stone: Stone, visible: bool, dimmed: bool) -> Element {
     let (group, outer, inner) = match stone {
         Stone::Black => (
             "indicator-black",
@@ -17,8 +21,16 @@ fn indicator_stone(x: f64, stone: Stone, visible: bool) -> Element {
         ),
     };
 
+    let class = if !visible {
+        format!("{group} hidden")
+    } else if dimmed {
+        format!("{group} dimmed")
+    } else {
+        group.to_string()
+    };
+
     rsx! {
-        g { class: if visible { "{group}" } else { "{group} hidden" },
+        g { class: "{class}",
             circle {
                 class: "{outer}",
                 cx: "{x}",
@@ -219,6 +231,43 @@ pub fn ConfirmButton(enabled: bool, on_click: EventHandler<()>) -> Element {
             disabled: !enabled,
             onclick: move |_| on_click.call(()),
             "确认"
+        }
+    }
+}
+
+#[component]
+pub fn PerspectiveToggle(perspective: Stone, on_click: EventHandler<()>) -> Element {
+    rsx! {
+        button {
+            class: "perspective-toggle",
+            r#type: "button",
+            aria_label: "切换黑白视角",
+            onclick: move |_| on_click.call(()),
+            svg {
+                class: "turn-stones",
+                view_box: "6 0 52 40",
+                {indicator_stone_dim(21.0, Stone::Black, true, perspective != Stone::Black)}
+                {indicator_stone_dim(43.0, Stone::White, true, perspective != Stone::White)}
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ModeToggle(mode: crate::ui::AnalysisMode, on_click: EventHandler<()>) -> Element {
+    let winrate = mode == crate::ui::AnalysisMode::Winrate;
+
+    rsx! {
+        button {
+            class: "mode-toggle",
+            r#type: "button",
+            aria_label: if winrate { "切换到目差" } else { "切换到胜率" },
+            onclick: move |_| on_click.call(()),
+            if winrate {
+                span { class: "mode-percent", "%" }
+            } else {
+                span { class: "mode-score-glyph" }
+            }
         }
     }
 }

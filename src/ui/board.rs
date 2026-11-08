@@ -76,12 +76,33 @@ fn board_point(
 pub fn Board(
     game: Game,
     pending: Option<PendingMove>,
+    ownership: Option<Vec<f32>>,
     on_select: EventHandler<(usize, usize)>,
 ) -> Element {
     let size = game.size();
     let max = size - 1;
     let stars = star_points(size);
     let last_move = game.last_move();
+    let ownership_dots: Vec<(f64, f64, bool, f32)> = ownership
+        .as_ref()
+        .map(|ownership| {
+            let mut dots = Vec::new();
+            for y in 0..=max {
+                for x in 0..=max {
+                    if game.stone_at(x, y).is_some() {
+                        continue;
+                    }
+                    let value = ownership.get(y * size + x).copied().unwrap_or(0.0);
+                    if value.abs() < 0.05 {
+                        continue;
+                    }
+                    let opacity = 0.20 + 0.60 * value.abs().min(1.0);
+                    dots.push((x as f64 - 0.15, y as f64 - 0.15, value > 0.0, opacity));
+                }
+            }
+            dots
+        })
+        .unwrap_or_default();
 
     rsx! {
         svg {
@@ -134,6 +155,17 @@ pub fn Board(
                     cx: "{x}",
                     cy: "{y}",
                     r: "{STAR_RADIUS}",
+                }
+            }
+            for (dot_x, dot_y, black, opacity) in ownership_dots {
+                rect {
+                    class: if black { "ownership-dot black" } else { "ownership-dot white" },
+                    x: "{dot_x}",
+                    y: "{dot_y}",
+                    width: "0.30",
+                    height: "0.30",
+                    rx: "0.08",
+                    style: "opacity: {opacity:.3};",
                 }
             }
             for y in 0..=max {
