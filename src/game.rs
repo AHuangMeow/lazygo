@@ -217,6 +217,28 @@ impl Game {
         &self.moves[..self.cursor.min(self.moves.len())]
     }
 
+    pub fn all_moves(&self) -> &[Move] {
+        &self.moves
+    }
+
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    pub fn is_replaying(&self) -> bool {
+        self.cursor < self.moves.len()
+    }
+
+    pub fn replay_to(&self, turn: usize) -> Option<Self> {
+        if turn > self.moves.len() {
+            return None;
+        }
+
+        let mut next = self.clone();
+        next.cursor = turn;
+        Some(next)
+    }
+
     pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {
         self.current().board.get(x, y)
     }
@@ -661,6 +683,37 @@ mod tests {
 
         let branched = undone.play(3, 3).unwrap();
         assert_eq!(branched.moves(), &[Move::Play(4, 4), Move::Play(3, 3)]);
+    }
+
+    #[test]
+    fn keeps_full_history_while_replaying() {
+        let game = Game::new(9).play(4, 4).unwrap().play(3, 3).unwrap().pass();
+
+        assert_eq!(game.cursor(), 3);
+        assert!(!game.is_replaying());
+        assert_eq!(
+            game.all_moves(),
+            &[Move::Play(4, 4), Move::Play(3, 3), Move::Pass]
+        );
+
+        let replayed = game.replay_to(1).unwrap();
+        assert_eq!(replayed.cursor(), 1);
+        assert!(replayed.is_replaying());
+        assert_eq!(replayed.moves(), &[Move::Play(4, 4)]);
+        assert_eq!(replayed.all_moves(), game.all_moves());
+        assert_eq!(replayed.stone_at(3, 3), None);
+        assert_eq!(replayed.turn(), Stone::White);
+
+        let latest = replayed.replay_to(3).unwrap();
+        assert_eq!(latest.cursor(), 3);
+        assert!(!latest.is_replaying());
+        assert_eq!(latest.turn(), Stone::White);
+    }
+
+    #[test]
+    fn replay_rejects_out_of_range_turns() {
+        let game = Game::new(9).play(4, 4).unwrap();
+        assert!(game.replay_to(2).is_none());
     }
 
     #[test]

@@ -104,7 +104,7 @@ impl Session {
     }
 
     pub fn select(&mut self, x: usize, y: usize) {
-        if x >= self.game.size() || y >= self.game.size() {
+        if self.game.is_replaying() || x >= self.game.size() || y >= self.game.size() {
             return;
         }
 
@@ -120,6 +120,9 @@ impl Session {
     }
 
     pub fn confirm(&mut self) {
+        if self.game.is_replaying() {
+            return;
+        }
         let Some(pending) = self.pending else {
             return;
         };
@@ -139,6 +142,9 @@ impl Session {
     }
 
     pub fn toggle_pass(&mut self) {
+        if self.game.is_replaying() {
+            return;
+        }
         if self.pass_armed {
             self.pass_armed = false;
             self.pass();
@@ -155,6 +161,9 @@ impl Session {
     }
 
     pub fn pass(&mut self) {
+        if self.game.is_replaying() {
+            return;
+        }
         self.game = self.game.pass();
         self.started = true;
         self.pending = None;
@@ -174,6 +183,36 @@ impl Session {
             self.game = next;
             self.pending = None;
             self.dismiss_overlays();
+        }
+    }
+
+    pub fn is_replaying(&self) -> bool {
+        self.game.is_replaying()
+    }
+
+    pub fn replay_to(&mut self, turn: usize) {
+        if let Some(next) = self.game.replay_to(turn) {
+            self.game = next;
+            self.pending = None;
+            self.pass_armed = false;
+            self.dismiss_overlays();
+        }
+    }
+
+    pub fn analysis_query_at(&self, turn: usize, max_visits: u32) -> AnalysisQuery {
+        let mut moves = self.game.all_moves().to_vec();
+        moves.truncate(turn.min(moves.len()));
+
+        AnalysisQuery {
+            size: self.game.size(),
+            rules: self.game.rules(),
+            komi: self
+                .komi
+                .trim()
+                .parse()
+                .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap()),
+            moves,
+            max_visits,
         }
     }
 
@@ -430,6 +469,42 @@ mod tests {
 
         assert!(session.pass_armed());
         assert!(!session.reset_armed());
+    }
+
+    #[test]
+    fn replaying_blocks_new_moves_and_passes() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        session.confirm();
+        session.select(3, 3);
+        session.confirm();
+        session.undo();
+
+        assert!(session.is_replaying());
+        session.select(2, 2);
+        assert!(session.pending().is_none());
+        session.toggle_pass();
+        assert!(!session.pass_armed());
+        session.pass();
+        assert_eq!(session.game().moves().len(), 1);
+
+        session.replay_to(2);
+        assert!(!session.is_replaying());
+        assert_eq!(session.game().moves().len(), 2);
+    }
+
+    #[test]
+    fn analysis_queries_can_target_a_turn() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        session.confirm();
+        session.select(3, 3);
+        session.confirm();
+        session.undo();
+
+        assert_eq!(session.analysis_query_at(1, 100).moves.len(), 1);
+        assert_eq!(session.analysis_query_at(2, 100).moves.len(), 2);
+        assert_eq!(session.analysis_query_at(99, 100).moves.len(), 2);
     }
 
     #[test]
