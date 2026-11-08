@@ -214,7 +214,7 @@ impl Game {
     }
 
     pub fn moves(&self) -> &[Move] {
-        &self.moves[..self.cursor]
+        &self.moves[..self.cursor.min(self.moves.len())]
     }
 
     pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {

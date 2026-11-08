@@ -5,7 +5,7 @@ mod ui;
 
 use ui::{
     AnalysisPanel, AnalysisUiState, Board, ConfirmButton, HistoryButton, HistoryDirection,
-    KomiField, ResetButton, RuleMenu, SizeMenu, Topbar, TurnIndicator,
+    KomiField, ResetButton, RuleMenu, SettingsPage, SizeMenu, Topbar, TurnIndicator,
 };
 
 const MAIN_CSS: &str = include_str!("../assets/main.css");
@@ -16,10 +16,17 @@ fn main() {
     dioxus::launch(App);
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Game,
+    Settings,
+}
+
 #[component]
 fn App() -> Element {
     let mut session = use_signal(Session::new);
     let mut analysis = use_signal(AnalysisUiState::new);
+    let mut page = use_signal(|| Page::Game);
 
     use_future(move || async move {
         loop {
@@ -54,7 +61,11 @@ fn App() -> Element {
             analysis.error().map(str::to_string),
         )
     };
-    let mut chart = analysis.read().chart(&state);
+    let mut chart = if analysis_open {
+        analysis.read().chart(&state)
+    } else {
+        Vec::new()
+    };
     if let Some(snapshot) = current_snapshot.as_ref() {
         if current_index < chart.len() {
             chart[current_index] = Some(snapshot.clone());
@@ -68,6 +79,7 @@ fn App() -> Element {
         })
         .flatten();
     let max_visits = analysis.read().max_visits();
+    let settings_open = page() == Page::Settings;
     let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
     let font_face = format!(
         r#"@font-face {{ font-family: "Maiyuan II"; src: url("{}") format("truetype"); font-style: normal; font-weight: 400; font-display: swap; }}"#,
@@ -77,19 +89,31 @@ fn App() -> Element {
     rsx! {
         style { "{MAIN_CSS}\n{font_face}" }
         main { class: "page",
-            Topbar {}
-            if state.pass_armed() {
-                div {
-                    class: "pass-backdrop",
-                    onclick: move |_| session.write().cancel_pass(),
+            Topbar { on_settings: move |_| page.set(Page::Settings) }
+            if !settings_open {
+                if state.pass_armed() {
+                    div {
+                        class: "pass-backdrop",
+                        onclick: move |_| session.write().cancel_pass(),
+                    }
+                }
+                if state.reset_armed() {
+                    div {
+                        class: "reset-backdrop",
+                        onclick: move |_| session.write().cancel_reset(),
+                    }
                 }
             }
-            if state.reset_armed() {
-                div {
-                    class: "reset-backdrop",
-                    onclick: move |_| session.write().cancel_reset(),
+            if settings_open {
+                SettingsPage {
+                    max_visits,
+                    analysis_enabled,
+                    analysis_error,
+                    on_back: move |_| page.set(Page::Game),
+                    on_changed: move |_| analysis.write().reload(),
+                    on_depth: move |value| analysis.write().set_max_visits(value),
                 }
-            }
+            } else {
             section { class: "content", style: "{board_margin}",
                 div { class: "board-column",
                     Board {
@@ -166,6 +190,7 @@ fn App() -> Element {
                         }
                     }
                 }
+            }
             }
         }
     }

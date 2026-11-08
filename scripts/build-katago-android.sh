@@ -56,7 +56,12 @@ build() {
     "$STRIP" --strip-unneeded "$DIST/$android_abi/libkatago.so"
 }
 
-build arm64-v8a aarch64-linux-android
-build x86_64 x86_64-linux-android
+for abi in ${KATAGO_ABIS:-arm64-v8a x86_64}; do
+    case "$abi" in
+        arm64-v8a) build arm64-v8a aarch64-linux-android ;;
+        x86_64) build x86_64 x86_64-linux-android ;;
+        *) echo "unsupported KATAGO_ABIS entry: $abi" >&2; exit 1 ;;
+    esac
+done
 
 ls -lh "$DIST"/*/libkatago.so

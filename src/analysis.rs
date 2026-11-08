@@ -250,6 +250,48 @@ pub fn analysis_enabled() -> bool {
     native_engine_path().is_some() && active_model().is_some() && analysis_config_path().is_some()
 }
 
+pub fn validate_model(path: &Path) -> Result<(), String> {
+    let path = path.to_path_buf();
+    std::thread::spawn(move || validate_model_inner(&path))
+        .join()
+        .map_err(|_| "模型校验线程异常退出".to_string())?
+}
+
+fn validate_model_inner(path: &Path) -> Result<(), String> {
+    let engine = native_engine_path().ok_or("KataGo 引擎不可用")?;
+    let config = analysis_config_path().ok_or("无法创建分析配置")?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("无法启动校验运行时: {error}"))?;
+
+    runtime.block_on(async {
+        let options = katago_analysis::engine::LaunchOptions::new(
+            engine.to_string_lossy().into_owned(),
+            config.to_string_lossy().into_owned(),
+            path.to_string_lossy().into_owned(),
+        );
+        let mut analyzer: katago_analysis::Analyzer =
+            katago_analysis::engine::Engine::launch(&options)
+                .map_err(|error| format!("模型加载失败: {error}"))?
+                .into();
+        let request = katago_analysis::AnalysisRequest::new(
+            katago_analysis::Rules::chinese_ogs(),
+            9,
+            9,
+            Vec::new(),
+        )
+        .with_komi(7.5)
+        .with_max_visits(1);
+
+        match analyzer.analyze(request).await {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err("模型没有返回分析结果".into()),
+            Err(error) => Err(format!("模型校验失败: {error}")),
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

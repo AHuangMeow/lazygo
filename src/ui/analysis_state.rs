@@ -111,7 +111,6 @@ impl AnalysisUiState {
         };
     }
 
-    #[allow(dead_code)] // wired up by the settings page
     pub fn set_max_visits(&mut self, max_visits: u32) {
         let max_visits = max_visits.clamp(1, 5000);
         if max_visits == self.max_visits {
