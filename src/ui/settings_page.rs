@@ -4,6 +4,8 @@ use lazygo::analysis::{
     active_model, disable_model, import_model, models, select_model, validate_model, ModelInfo,
 };
 
+use super::Menu;
+
 const PICK_MODEL_SCRIPT: &str = r#"
 const start = () => {
     const input = document.createElement("input");
@@ -25,7 +27,7 @@ const start = () => {
     input.onchange = () => {
         const file = input.files && input.files[0];
         if (!file) {
-            done({ error: "未选择文件" });
+            done({ cancelled: true });
             return;
         }
         const reader = new FileReader();
@@ -41,7 +43,7 @@ const start = () => {
         reader.onerror = () => done({ error: "读取文件失败" });
         reader.readAsArrayBuffer(file);
     };
-    input.oncancel = () => done({ error: "已取消" });
+    input.oncancel = () => done({ cancelled: true });
     input.click();
 
     setTimeout(() => {
@@ -56,6 +58,7 @@ struct PickedModel {
     name: Option<String>,
     data: Option<String>,
     error: Option<String>,
+    cancelled: Option<bool>,
 }
 
 #[component]
@@ -89,61 +92,52 @@ pub fn SettingsPage(
                 span { class: "settings-label", "模型" }
                 span { class: "settings-leader" }
                 div { class: "settings-control",
-                    div { class: "model-select",
+                    Menu {
+                        label: active_name.to_string(),
+                        trigger_class: "model-select-trigger",
+                        options_class: "model-options",
+                        aria_label: "Model",
+                        open: menu_open(),
+                        locked: false,
+                        on_toggle: move |_| menu_open.toggle(),
                         button {
-                            class: if menu_open() {
-                                "model-select-trigger open"
+                            class: if active_id.is_none() {
+                                "menu-option muted selected"
                             } else {
-                                "model-select-trigger"
+                                "menu-option muted"
                             },
                             r#type: "button",
-                            aria_expanded: menu_open(),
-                            onclick: move |_| menu_open.toggle(),
-                            span { class: "model-select-label", "{active_name}" }
-                            span { class: "chevron" }
-                        }
-                        if menu_open() {
-                            div { class: "model-options",
-                                button {
-                                    class: if active_id.is_none() {
-                                        "model-option muted selected"
-                                    } else {
-                                        "model-option muted"
-                                    },
-                                    r#type: "button",
-                                    onclick: move |_| {
-                                        match disable_model() {
-                                            Ok(()) => {
-                                                active.set(None);
-                                                menu_open.set(false);
-                                                on_changed.call(());
-                                            }
-                                            Err(error) => status.set(Some(error)),
-                                        }
-                                    },
-                                    "禁用"
+                            onclick: move |_| {
+                                match disable_model() {
+                                    Ok(()) => {
+                                        active.set(None);
+                                        menu_open.set(false);
+                                        on_changed.call(());
+                                    }
+                                    Err(error) => status.set(Some(error)),
                                 }
-                                for model in model_items.iter() {
-                                    {
-                                        let id = model.id.clone();
-                                        let selected = active_id.as_deref() == Some(id.as_str());
-                                        rsx! {
-                                            button {
-                                                class: if selected { "model-option selected" } else { "model-option" },
-                                                r#type: "button",
-                                                onclick: move |_| {
-                                                    match select_model(&id) {
-                                                        Ok(()) => {
-                                                            active.set(Some(id.clone()));
-                                                            menu_open.set(false);
-                                                            on_changed.call(());
-                                                        }
-                                                        Err(error) => status.set(Some(error)),
-                                                    }
-                                                },
-                                                "{model.name}"
+                            },
+                            "禁用"
+                        }
+                        for model in model_items.iter() {
+                            {
+                                let id = model.id.clone();
+                                let selected = active_id.as_deref() == Some(id.as_str());
+                                rsx! {
+                                    button {
+                                        class: if selected { "menu-option selected" } else { "menu-option" },
+                                        r#type: "button",
+                                        onclick: move |_| {
+                                            match select_model(&id) {
+                                                Ok(()) => {
+                                                    active.set(Some(id.clone()));
+                                                    menu_open.set(false);
+                                                    on_changed.call(());
+                                                }
+                                                Err(error) => status.set(Some(error)),
                                             }
-                                        }
+                                        },
+                                        "{model.name}"
                                     }
                                 }
                             }
@@ -179,6 +173,11 @@ pub fn SettingsPage(
                                     }
                                 };
 
+                                if picked.cancelled.unwrap_or(false) {
+                                    busy.set(false);
+                                    status.set(None);
+                                    return;
+                                }
                                 if let Some(error) = picked.error {
                                     busy.set(false);
                                     status.set(Some(error));
@@ -255,6 +254,7 @@ pub fn SettingsPage(
                         max: "5000",
                         step: "10",
                         value: "{current_depth}",
+                        disabled: active_id.is_none(),
                         onchange: move |event| {
                             if let Ok(value) = event.value().parse::<u32>() {
                                 let value = value.clamp(1, 5000);

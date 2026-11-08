@@ -230,6 +230,7 @@ body {
     border: 2.5px solid var(--ctp-overlay0);
     border-radius: 10px;
     background: var(--ctp-surface0);
+    transition: opacity 180ms ease, border-color 120ms ease;
 }
 
 .komi-field:focus-within {
@@ -416,6 +417,8 @@ body {
 }
 
 .confirm-button {
+    position: relative;
+    z-index: 4;
     min-width: 72px;
     min-height: 38px;
     padding: 6px 12px;
@@ -450,10 +453,15 @@ body {
 }
 
 .pass-backdrop,
-.reset-backdrop {
+.reset-backdrop,
+.pending-backdrop {
     position: fixed;
     inset: 0;
     z-index: 3;
+}
+
+.pending-backdrop {
+    background: transparent;
 }
 
 .menu {
@@ -478,6 +486,8 @@ body {
     font-size: 0.85rem;
     line-height: 1.2;
     cursor: pointer;
+    transition: opacity 180ms ease, border-color 120ms ease, background-color 120ms ease,
+        color 120ms ease;
 }
 
 .menu-trigger:focus-visible {
@@ -529,6 +539,7 @@ body {
     border: 2.5px solid var(--ctp-overlay0);
     border-radius: 10px;
     background: var(--ctp-surface0);
+    animation: menu-in 120ms ease-out;
 }
 
 .rule-options {
@@ -713,6 +724,14 @@ body {
     border: 2.5px solid var(--ctp-overlay0);
     border-radius: 10px;
     background: var(--ctp-surface0);
+    animation: menu-in 140ms ease-out;
+}
+
+.analysis-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: menu-in 120ms ease-out;
 }
 
 .analysis-chart-svg {
@@ -819,7 +838,7 @@ body {
 .settings-page-title {
     margin: 0 0 12px;
     color: var(--ctp-text);
-    font-size: 1.3rem;
+    font-size: 1.95rem;
     font-weight: 400;
     line-height: 1.2;
 }
@@ -836,12 +855,12 @@ body {
     grid-template-columns: max-content 1fr max-content;
     align-items: center;
     gap: 10px;
-    min-height: 46px;
+    min-height: 56px;
 }
 
 .settings-label {
     color: var(--ctp-text);
-    font-size: 0.95rem;
+    font-size: 1.425rem;
     line-height: 1.2;
     white-space: nowrap;
 }
@@ -858,11 +877,6 @@ body {
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    min-width: 0;
-}
-
-.model-select {
-    position: relative;
     min-width: 0;
 }
 
@@ -890,10 +904,6 @@ body {
     border-color: var(--ctp-overlay2);
 }
 
-.model-select-trigger.open .chevron {
-    transform: rotate(225deg) translateY(-2px);
-}
-
 .model-select-trigger:focus-visible,
 .settings-import:focus-visible,
 .depth-input:focus-visible {
@@ -901,26 +911,15 @@ body {
     outline-offset: 2px;
 }
 
-.model-select-label {
+.model-select-trigger span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .model-options {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    min-width: 100%;
+    min-width: 230px;
     max-width: 230px;
-    padding: 4px;
-    border: 2.5px solid var(--ctp-overlay0);
-    border-radius: 10px;
-    background: var(--ctp-surface0);
-    animation: menu-in 120ms ease-out;
 }
 
 @keyframes menu-in {
@@ -934,37 +933,12 @@ body {
     }
 }
 
-.model-option {
-    padding: 7px 8px;
-    overflow: hidden;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--ctp-subtext0);
-    font: inherit;
-    font-size: 0.85rem;
-    line-height: 1.2;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.model-option:hover:not(:disabled) {
-    background: var(--ctp-surface1);
-    color: var(--ctp-text);
-}
-
-.model-option.selected {
-    background: var(--ctp-surface2);
-    color: var(--ctp-text);
-}
-
-.model-option.muted {
+.menu-option.muted {
     color: var(--ctp-overlay2);
 }
 
-.model-option.muted:hover {
+.menu-option.muted:hover,
+.menu-option.muted.selected {
     color: var(--ctp-text);
 }
 
@@ -980,7 +954,7 @@ body {
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
-    transition: border-color 120ms ease, background-color 120ms ease;
+    transition: opacity 180ms ease, border-color 120ms ease, background-color 120ms ease;
 }
 
 .settings-import:hover:not(:disabled) {
@@ -1009,7 +983,12 @@ body {
     font-size: 0.85rem;
     line-height: 1.2;
     text-align: right;
-    transition: border-color 120ms ease;
+    transition: opacity 180ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.depth-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .settings-error {
@@ -1051,4 +1030,17 @@ body {
 
 .ownership-dot.white.on-stone {
     stroke: var(--ctp-base);
+}
+
+.board-frame {
+    position: relative;
+    flex: none;
+    width: 100%;
+}
+
+.board-hit-layer {
+    position: absolute;
+    inset: calc(-1 * var(--board-margin, 24px));
+    z-index: 2;
+    touch-action: manipulation;
 }
