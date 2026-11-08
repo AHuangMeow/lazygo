@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dioxus::prelude::*;
 use lazygo::analysis::{
-    active_model, import_model, models, select_model, validate_model, ModelInfo,
+    active_model, disable_model, import_model, models, select_model, validate_model, ModelInfo,
 };
 
 const PICK_MODEL_SCRIPT: &str = r#"
@@ -77,7 +77,7 @@ pub fn SettingsPage(
         .as_deref()
         .and_then(|id| model_items.iter().find(|model| model.id == id))
         .map(|model| model.name.as_str())
-        .unwrap_or("未选择模型");
+        .unwrap_or("禁用");
     let current_depth = depth();
 
     rsx! {
@@ -91,7 +91,11 @@ pub fn SettingsPage(
                 div { class: "settings-control",
                     div { class: "model-select",
                         button {
-                            class: "model-select-trigger",
+                            class: if menu_open() {
+                                "model-select-trigger open"
+                            } else {
+                                "model-select-trigger"
+                            },
                             r#type: "button",
                             aria_expanded: menu_open(),
                             onclick: move |_| menu_open.toggle(),
@@ -101,10 +105,23 @@ pub fn SettingsPage(
                         if menu_open() {
                             div { class: "model-options",
                                 button {
-                                    class: "model-option disabled",
+                                    class: if active_id.is_none() {
+                                        "model-option muted selected"
+                                    } else {
+                                        "model-option muted"
+                                    },
                                     r#type: "button",
-                                    disabled: true,
-                                    "不使用模型"
+                                    onclick: move |_| {
+                                        match disable_model() {
+                                            Ok(()) => {
+                                                active.set(None);
+                                                menu_open.set(false);
+                                                on_changed.call(());
+                                            }
+                                            Err(error) => status.set(Some(error)),
+                                        }
+                                    },
+                                    "禁用"
                                 }
                                 for model in model_items.iter() {
                                     {

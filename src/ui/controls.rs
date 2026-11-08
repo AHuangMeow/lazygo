@@ -260,13 +260,13 @@ pub fn PerspectiveToggle(perspective: Stone, on_click: EventHandler<()>) -> Elem
                     class: "{outer}",
                     cx: "20",
                     cy: "20",
-                    r: "16",
+                    r: "18",
                 }
                 circle {
                     class: "{inner}",
                     cx: "20",
                     cy: "20",
-                    r: "14",
+                    r: "16",
                 }
             }
         }

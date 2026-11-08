@@ -9,6 +9,7 @@ const MODEL_DIR: &str = "models";
 const ACTIVE_MODEL_FILE: &str = "active";
 const SETTINGS_FILE: &str = "settings.json";
 const MODEL_MAGIC: [u8; 2] = [0x1f, 0x8b];
+const DISABLED_MODEL: &str = "__disabled__";
 
 pub fn native_engine_path() -> Option<PathBuf> {
     let maps = fs::read_to_string("/proc/self/maps").ok()?;
@@ -92,6 +93,10 @@ pub fn active_model() -> Option<ModelInfo> {
         .and_then(|dir| fs::read_to_string(dir.join(MODEL_DIR).join(ACTIVE_MODEL_FILE)).ok());
     let active = active.as_deref().map(str::trim).filter(|id| !id.is_empty());
 
+    if active.is_some_and(is_disabled_model) {
+        return None;
+    }
+
     active
         .and_then(|id| models.iter().find(|model| model.id == id).cloned())
         .or_else(|| models.first().cloned())
@@ -122,6 +127,16 @@ pub fn import_model(name: &str, bytes: &[u8]) -> Result<ModelInfo, String> {
     set_active_model(&name)?;
 
     ModelInfo::from_path(path).ok_or_else(|| "模型保存后无法读取".to_string())
+}
+
+pub fn disable_model() -> Result<(), String> {
+    let dir = models_dir().ok_or_else(|| "无法访问应用存储目录".to_string())?;
+    fs::write(dir.join(ACTIVE_MODEL_FILE), DISABLED_MODEL)
+        .map_err(|error| format!("保存模型选择失败: {error}"))
+}
+
+fn is_disabled_model(active: &str) -> bool {
+    active == DISABLED_MODEL
 }
 
 pub fn select_model(id: &str) -> Result<(), String> {
@@ -321,6 +336,12 @@ mod tests {
     #[test]
     fn default_analysis_depth_is_200() {
         assert_eq!(AnalysisSettings::default().max_visits, 200);
+    }
+
+    #[test]
+    fn recognizes_disabled_model_sentinel() {
+        assert!(is_disabled_model(DISABLED_MODEL));
+        assert!(!is_disabled_model("b6c96.bin.gz"));
     }
 
     #[test]
