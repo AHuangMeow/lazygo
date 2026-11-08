@@ -43,6 +43,35 @@ fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
     }
 }
 
+fn board_point(
+    client_x: f64,
+    client_y: f64,
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+    max: usize,
+) -> Option<(usize, usize)> {
+    if width <= 0.0 || height <= 0.0 || max == 0 {
+        return None;
+    }
+
+    if client_x < left || client_x > left + width || client_y < top || client_y > top + height {
+        return None;
+    }
+
+    let x = (client_x - left) / width * max as f64;
+    let y = (client_y - top) / height * max as f64;
+    let nearest_x = x.round();
+    let nearest_y = y.round();
+
+    if (x - nearest_x).powi(2) + (y - nearest_y).powi(2) > HIT_RADIUS.powi(2) {
+        return None;
+    }
+
+    Some((nearest_x as usize, nearest_y as usize))
+}
+
 #[component]
 pub fn Board(
     game: Game,
@@ -58,6 +87,31 @@ pub fn Board(
         svg {
             class: "board",
             view_box: "0 0 {max} {max}",
+            onclick: move |event| {
+                let client = event.data().client_coordinates();
+                spawn(async move {
+                    let mut eval = document::eval(
+                        r#"
+                        const rect = document.querySelector(".board").getBoundingClientRect();
+                        dioxus.send(`${rect.left},${rect.top},${rect.width},${rect.height}`);
+                        "#,
+                    );
+                    let Ok(value) = eval.recv::<String>().await else {
+                        return;
+                    };
+                    let mut parts = value.split(',').filter_map(|part| part.parse::<f64>().ok());
+                    let (Some(left), Some(top), Some(width), Some(height)) =
+                        (parts.next(), parts.next(), parts.next(), parts.next())
+                    else {
+                        return;
+                    };
+                    if let Some(point) =
+                        board_point(client.x, client.y, left, top, width, height, max)
+                    {
+                        on_select.call(point);
+                    }
+                });
+            },
             for index in 0..=max {
                 line {
                     class: "board-line",
@@ -98,16 +152,27 @@ pub fn Board(
                             }
                         }
                     }
-                    circle {
-                        class: "board-hit",
-                        fill: "none",
-                        cx: "{x}",
-                        cy: "{y}",
-                        r: "{HIT_RADIUS}",
-                        onclick: move |_| on_select.call((x, y)),
-                    }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::board_point;
+
+    #[test]
+    fn hit_test_accepts_points_inside_the_radius() {
+        assert_eq!(
+            board_point(430.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((4, 4))
+        );
+    }
+
+    #[test]
+    fn hit_test_ignores_gaps_and_outside_taps() {
+        assert_eq!(board_point(450.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
+        assert_eq!(board_point(-1.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
     }
 }

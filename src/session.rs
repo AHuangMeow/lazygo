@@ -1,6 +1,11 @@
 use crate::game::{Game, Rules, DEFAULT_SIZE};
 
-pub const DEFAULT_KOMI: &str = "6.5";
+fn default_komi(rules: Rules) -> &'static str {
+    match rules {
+        Rules::Japanese => "6.5",
+        Rules::Chinese | Rules::Ing => "7.5",
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PendingMove {
@@ -12,6 +17,7 @@ pub struct PendingMove {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Session {
     game: Game,
+    started: bool,
     pending: Option<PendingMove>,
     size_open: bool,
     rule_open: bool,
@@ -30,12 +36,13 @@ impl Session {
     pub fn new() -> Self {
         Self {
             game: Game::new(DEFAULT_SIZE),
+            started: false,
             pending: None,
             size_open: false,
             rule_open: false,
             reset_armed: false,
             reset_rotation: 0,
-            komi: DEFAULT_KOMI.to_string(),
+            komi: default_komi(Rules::Chinese).to_string(),
         }
     }
 
@@ -68,7 +75,7 @@ impl Session {
     }
 
     pub fn settings_locked(&self) -> bool {
-        !self.game.is_initial()
+        self.started
     }
 
     pub fn can_confirm(&self) -> bool {
@@ -104,6 +111,7 @@ impl Session {
 
         if let Some(next) = self.game.play(pending.x, pending.y) {
             self.game = next;
+            self.started = true;
         }
 
         self.dismiss_overlays();
@@ -111,6 +119,7 @@ impl Session {
 
     pub fn pass(&mut self) {
         self.game = self.game.pass();
+        self.started = true;
         self.pending = None;
         self.dismiss_overlays();
     }
@@ -138,6 +147,7 @@ impl Session {
 
         if self.reset_armed {
             self.game = Game::with_rules(self.game.size(), self.game.rules());
+            self.started = false;
             self.pending = None;
             self.reset_armed = false;
         } else {
@@ -157,6 +167,7 @@ impl Session {
 
         if size != self.game.size() {
             self.game = Game::with_rules(size, self.game.rules());
+            self.started = false;
             self.pending = None;
         }
 
@@ -170,7 +181,9 @@ impl Session {
 
         if rules != self.game.rules() {
             self.game = Game::with_rules(self.game.size(), rules);
+            self.started = false;
             self.pending = None;
+            self.komi = default_komi(rules).to_string();
         }
 
         self.dismiss_overlays();
@@ -266,8 +279,10 @@ mod tests {
         session.toggle_reset();
 
         assert!(session.game().is_initial());
+        assert!(!session.settings_locked());
         assert_eq!(session.game().rules(), Rules::Japanese);
         assert_eq!(session.game().size(), 13);
+        assert_eq!(session.komi(), "6.5");
     }
 
     #[test]
@@ -282,7 +297,7 @@ mod tests {
 
         assert_eq!(session.game().rules(), Rules::Chinese);
         assert_eq!(session.game().size(), 9);
-        assert_eq!(session.komi(), "6.5");
+        assert_eq!(session.komi(), "7.5");
     }
 
     #[test]
@@ -295,5 +310,51 @@ mod tests {
         assert!(session.pending().is_none());
         assert!(session.game().is_initial());
         assert_eq!(session.game().rules(), Rules::Ing);
+        assert_eq!(session.komi(), "7.5");
+    }
+
+    #[test]
+    fn rules_set_their_default_komi() {
+        let mut session = Session::new();
+
+        assert_eq!(session.komi(), "7.5");
+
+        session.set_rules(Rules::Japanese);
+        assert_eq!(session.komi(), "6.5");
+
+        session.set_rules(Rules::Ing);
+        assert_eq!(session.komi(), "7.5");
+
+        session.set_rules(Rules::Chinese);
+        assert_eq!(session.komi(), "7.5");
+    }
+
+    #[test]
+    fn undo_to_initial_keeps_settings_locked() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.confirm();
+        session.undo();
+
+        assert!(session.game().is_initial());
+        assert!(session.settings_locked());
+
+        session.set_rules(Rules::Ing);
+        assert_eq!(session.game().rules(), Rules::Chinese);
+
+        session.toggle_reset();
+        session.toggle_reset();
+
+        assert!(!session.settings_locked());
+    }
+
+    #[test]
+    fn pass_locks_settings() {
+        let mut session = Session::new();
+
+        session.pass();
+
+        assert!(session.settings_locked());
     }
 }

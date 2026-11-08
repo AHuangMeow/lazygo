@@ -175,12 +175,6 @@ body {
     fill: var(--ctp-base);
 }
 
-.board-hit {
-    fill: transparent;
-    cursor: pointer;
-    pointer-events: all;
-}
-
 .pending-frame {
     fill: none;
     stroke: var(--ctp-text);
