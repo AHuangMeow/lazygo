@@ -94,6 +94,14 @@ impl AnalysisUiState {
         self.current.as_ref()
     }
 
+    pub fn current_matches(&self, session: &Session) -> bool {
+        let Some(model_id) = self.controller.model_id() else {
+            return false;
+        };
+        let query = session.analysis_query(self.max_visits);
+        self.current_key.as_ref() == Some(&AnalysisKey::new(&query, model_id))
+    }
+
     pub fn toggle_panel(&mut self) {
         if self.enabled {
             self.panel_open = !self.panel_open;

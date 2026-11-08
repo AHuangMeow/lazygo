@@ -51,7 +51,15 @@ fn App() -> Element {
     let game = current.clone();
     let current_index = game.cursor();
     let move_history = game.all_moves().to_vec();
-    let (analysis_enabled, analysis_open, perspective, mode, current_snapshot, analysis_error) = {
+    let (
+        analysis_enabled,
+        analysis_open,
+        perspective,
+        mode,
+        current_snapshot,
+        current_matches,
+        analysis_error,
+    ) = {
         let analysis = analysis.read();
         (
             analysis.enabled(),
@@ -59,15 +67,23 @@ fn App() -> Element {
             analysis.perspective(),
             analysis.mode(),
             analysis.current().cloned(),
+            analysis.current_matches(&state),
             analysis.error().map(str::to_string),
         )
     };
     let mut chart = analysis.read().chart(&state);
-    if let Some(snapshot) = current_snapshot.as_ref() {
-        if current_index < chart.len() {
-            chart[current_index] = Some(snapshot.clone());
+    if current_matches {
+        if let Some(snapshot) = current_snapshot.as_ref() {
+            if current_index < chart.len() {
+                chart[current_index] = Some(snapshot.clone());
+            }
         }
-    } else if current_index > 0 && current_index < chart.len() && chart[current_index].is_none() {
+    }
+    if !current_matches
+        && current_index > 0
+        && current_index < chart.len()
+        && chart[current_index].is_none()
+    {
         // Keep the new turn visible while KataGo is still evaluating it.
         if let Some(previous) = chart[..current_index]
             .iter()
@@ -79,9 +95,11 @@ fn App() -> Element {
     }
     let ownership = analysis_open
         .then(|| {
-            current_snapshot
-                .as_ref()
-                .map(|snapshot| snapshot.ownership.clone())
+            current_matches.then(|| {
+                current_snapshot
+                    .as_ref()
+                    .map(|snapshot| snapshot.ownership.clone())
+            })?
         })
         .flatten();
     let max_visits = analysis.read().max_visits();

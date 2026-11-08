@@ -33,12 +33,14 @@ const setupRing = () => {
         el.style.transform = `translate(${x}px, ${y}px)`;
     };
     const isVisible = () => !el.classList.contains("hidden");
-    const state = { x: 0, y: 0, raf: 0, hasPosition: false };
+    const state = { x: 0, y: 0, visualX: 0, visualY: 0, raf: 0, hasPosition: false };
     const target = parseTarget();
 
     if (target) {
         state.x = target.x;
         state.y = target.y;
+        state.visualX = target.x;
+        state.visualY = target.y;
         if (isVisible()) {
             state.hasPosition = true;
             apply(state.x, state.y);
@@ -59,6 +61,8 @@ const setupRing = () => {
         if (!state.hasPosition) {
             state.x = next.x;
             state.y = next.y;
+            state.visualX = next.x;
+            state.visualY = next.y;
             state.hasPosition = true;
             apply(state.x, state.y);
             el.style.opacity = "1";
@@ -70,8 +74,8 @@ const setupRing = () => {
             return;
         }
 
-        const fromX = state.x;
-        const fromY = state.y;
+        const fromX = state.visualX;
+        const fromY = state.visualY;
         const toX = next.x;
         const toY = next.y;
         state.x = toX;
@@ -82,13 +86,16 @@ const setupRing = () => {
         const step = (now) => {
             const t = Math.min(1, (now - start) / duration);
             const eased = 1 - Math.pow(1 - t, 3);
-            apply(
-                fromX + (toX - fromX) * eased,
-                fromY + (toY - fromY) * eased
-            );
+            const x = fromX + (toX - fromX) * eased;
+            const y = fromY + (toY - fromY) * eased;
+            state.visualX = x;
+            state.visualY = y;
+            apply(x, y);
             if (t < 1) {
                 state.raf = requestAnimationFrame(step);
             } else {
+                state.visualX = toX;
+                state.visualY = toY;
                 state.raf = 0;
             }
         };
