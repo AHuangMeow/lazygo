@@ -210,22 +210,20 @@ pub fn AnalysisPanel(
                     span { "分析" }
                     span { class: "chevron" }
                 }
-                if open {
-                    div { class: "analysis-controls",
-                        PerspectiveToggle {
-                            perspective,
-                            on_click: move |_| on_perspective.call(()),
-                        }
-                        ModeToggle {
-                            mode,
-                            perspective,
-                            on_click: move |_| on_mode.call(()),
-                        }
+                div {
+                    class: if open { "analysis-controls open" } else { "analysis-controls" },
+                    PerspectiveToggle {
+                        perspective,
+                        on_click: move |_| on_perspective.call(()),
+                    }
+                    ModeToggle {
+                        mode,
+                        perspective,
+                        on_click: move |_| on_mode.call(()),
                     }
                 }
             }
-            if open {
-                section { class: "analysis-panel",
+            section { class: if open { "analysis-panel open" } else { "analysis-panel" },
                     AnalysisChart {
                         snapshots: chart,
                         perspective,
@@ -238,7 +236,6 @@ pub fn AnalysisPanel(
                         span { class: "analysis-error", "{error}" }
                     }
                 }
-            }
         }
     }
 }

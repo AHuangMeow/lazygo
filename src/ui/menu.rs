@@ -25,14 +25,17 @@ pub fn Menu(
                 span { "{label}" }
                 span { class: "chevron" }
             }
-            if expanded {
-                div {
-                    class: "menu-backdrop",
-                    onclick: move |_| on_toggle.call(()),
-                }
-                div { class: "menu-options {options_class}",
-                    {children}
-                }
+            div {
+                class: if expanded { "menu-backdrop open" } else { "menu-backdrop" },
+                onclick: move |_| on_toggle.call(()),
+            }
+            div {
+                class: if expanded {
+                    "menu-options {options_class} open"
+                } else {
+                    "menu-options {options_class}"
+                },
+                {children}
             }
         }
     }

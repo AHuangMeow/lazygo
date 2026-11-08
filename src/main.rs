@@ -62,11 +62,7 @@ fn App() -> Element {
             analysis.error().map(str::to_string),
         )
     };
-    let mut chart = if analysis_open {
-        analysis.read().chart(&state)
-    } else {
-        Vec::new()
-    };
+    let mut chart = analysis.read().chart(&state);
     if let Some(snapshot) = current_snapshot.as_ref() {
         if current_index < chart.len() {
             chart[current_index] = Some(snapshot.clone());
