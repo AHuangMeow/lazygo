@@ -13,6 +13,97 @@ const BOTTOM: f64 = 14.0;
 const PLOT_WIDTH: f64 = WIDTH - LEFT - RIGHT;
 const PLOT_HEIGHT: f64 = HEIGHT - TOP - BOTTOM;
 
+const RING_ANIMATION_SCRIPT: &str = r#"
+const setupRing = () => {
+    const el = document.getElementById("chart-current-marker");
+    if (!el) {
+        requestAnimationFrame(setupRing);
+        return;
+    }
+    if (el.__lazygoRingReady) return;
+    el.__lazygoRingReady = true;
+
+    const parseTarget = () => {
+        const match = /translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/.exec(
+            el.getAttribute("transform") || ""
+        );
+        return match ? { x: parseFloat(match[1]), y: parseFloat(match[2]) } : null;
+    };
+    const apply = (x, y) => {
+        el.style.transform = `translate(${x}px, ${y}px)`;
+    };
+    const isVisible = () => !el.classList.contains("hidden");
+    const state = { x: 0, y: 0, raf: 0, hasPosition: false };
+    const target = parseTarget();
+
+    if (target) {
+        state.x = target.x;
+        state.y = target.y;
+        if (isVisible()) {
+            state.hasPosition = true;
+            apply(state.x, state.y);
+            el.style.opacity = "1";
+        } else {
+            el.style.opacity = "0";
+        }
+    }
+
+    const animate = () => {
+        const next = parseTarget();
+        const visible = isVisible();
+        if (!next || !visible) {
+            el.style.opacity = "0";
+            return;
+        }
+
+        if (!state.hasPosition) {
+            state.x = next.x;
+            state.y = next.y;
+            state.hasPosition = true;
+            apply(state.x, state.y);
+            el.style.opacity = "1";
+            return;
+        }
+
+        el.style.opacity = "1";
+        if (Math.abs(state.x - next.x) < 0.01 && Math.abs(state.y - next.y) < 0.01) {
+            return;
+        }
+
+        const fromX = state.x;
+        const fromY = state.y;
+        const toX = next.x;
+        const toY = next.y;
+        state.x = toX;
+        state.y = toY;
+        if (state.raf) cancelAnimationFrame(state.raf);
+        const start = performance.now();
+        const duration = 300;
+        const step = (now) => {
+            const t = Math.min(1, (now - start) / duration);
+            const eased = 1 - Math.pow(1 - t, 3);
+            apply(
+                fromX + (toX - fromX) * eased,
+                fromY + (toY - fromY) * eased
+            );
+            if (t < 1) {
+                state.raf = requestAnimationFrame(step);
+            } else {
+                state.raf = 0;
+            }
+        };
+        state.raf = requestAnimationFrame(step);
+    };
+
+    new MutationObserver(animate).observe(el, {
+        attributes: true,
+        attributeFilter: ["transform", "class"],
+    });
+    animate();
+};
+setupRing();
+"#;
+
 fn point_value(snapshot: &AnalysisSnapshot, perspective: Stone, mode: AnalysisMode) -> f64 {
     match mode {
         AnalysisMode::Winrate => {
@@ -74,6 +165,10 @@ fn AnalysisChart(
                 .and_then(|snapshot| snapshot.as_ref())
         })
         .flatten();
+
+    use_effect(move || {
+        let _ = document::eval(RING_ANIMATION_SCRIPT);
+    });
 
     rsx! {
         svg {
@@ -147,30 +242,40 @@ fn AnalysisChart(
                     }
                 }
             }
-            if let Some(snapshot) = current {
-                {
+            {
+                let current_geometry = current.map(|snapshot| {
                     let value = point_value(snapshot, perspective, mode);
-                    let x = x_for(current_index);
-                    let y = y_for(value);
-                    let label_x = x.clamp(LEFT + 14.0, LEFT + PLOT_WIDTH - 14.0);
-                    let label_y = (y - 11.0).max(TOP + 9.0);
-                    rsx! {
+                    (x_for(current_index), y_for(value), value)
+                });
+                let (current_x, current_y, current_value) =
+                    current_geometry.unwrap_or((0.0, 0.0, 0.0));
+                let visible = current_geometry.is_some();
+                rsx! {
+                    g {
+                        id: "chart-current-marker",
+                        class: if visible {
+                            "chart-current-marker"
+                        } else {
+                            "chart-current-marker hidden"
+                        },
+                        transform: "translate({current_x} {current_y})",
                         circle {
                             class: "chart-current",
-                            cx: "{x}",
-                            cy: "{y}",
+                            cx: "0",
+                            cy: "0",
                             r: "6.6",
                         }
                         text {
                             class: "chart-value",
-                            x: "{label_x}",
-                            y: "{label_y}",
+                            x: "0",
+                            y: "-11",
                             text_anchor: "middle",
-                            "{value:.1}"
+                            "{current_value:.1}"
                         }
                     }
                 }
-            } else if snapshots.iter().all(Option::is_none) {
+            }
+            if snapshots.iter().all(Option::is_none) {
                 text {
                     class: "chart-empty",
                     x: "{LEFT + PLOT_WIDTH / 2.0}",

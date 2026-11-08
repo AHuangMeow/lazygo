@@ -828,6 +828,11 @@ body {
     pointer-events: none;
 }
 
+.chart-current-marker {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .chart-current {
     fill: none;
     stroke: var(--ctp-text);

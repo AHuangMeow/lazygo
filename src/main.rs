@@ -67,6 +67,15 @@ fn App() -> Element {
         if current_index < chart.len() {
             chart[current_index] = Some(snapshot.clone());
         }
+    } else if current_index > 0 && current_index < chart.len() && chart[current_index].is_none() {
+        // Keep the new turn visible while KataGo is still evaluating it.
+        if let Some(previous) = chart[..current_index]
+            .iter()
+            .rev()
+            .find_map(|snapshot| snapshot.clone())
+        {
+            chart[current_index] = Some(previous);
+        }
     }
     let ownership = analysis_open
         .then(|| {
