@@ -1,3 +1,4 @@
+use crate::analysis::engine::AnalysisQuery;
 use crate::game::{Game, Rules, DEFAULT_SIZE};
 
 fn default_komi(rules: Rules) -> &'static str {
@@ -50,6 +51,20 @@ impl Session {
 
     pub fn game(&self) -> &Game {
         &self.game
+    }
+
+    pub fn analysis_query(&self, max_visits: u32) -> AnalysisQuery {
+        AnalysisQuery {
+            size: self.game.size(),
+            rules: self.game.rules(),
+            komi: self
+                .komi
+                .trim()
+                .parse()
+                .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap()),
+            moves: self.game.moves().to_vec(),
+            max_visits,
+        }
     }
 
     pub fn pending(&self) -> Option<PendingMove> {

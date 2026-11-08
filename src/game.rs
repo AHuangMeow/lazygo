@@ -1,7 +1,7 @@
 pub const BOARD_SIZES: [usize; 3] = [9, 13, 19];
 pub const DEFAULT_SIZE: usize = 9;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Rules {
     #[default]
     Chinese,
@@ -36,6 +36,12 @@ impl Rules {
             Self::Chinese | Self::Ing => KoRule::Positional,
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Move {
+    Play(usize, usize),
+    Pass,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -165,6 +171,7 @@ struct State {
 pub struct Game {
     rules: Rules,
     states: Vec<State>,
+    moves: Vec<Move>,
     cursor: usize,
 }
 
@@ -181,6 +188,7 @@ impl Game {
                 turn: Stone::Black,
                 last_move: None,
             }],
+            moves: Vec::new(),
             cursor: 0,
         }
     }
@@ -203,6 +211,10 @@ impl Game {
 
     pub fn last_move(&self) -> Option<(usize, usize)> {
         self.current().last_move
+    }
+
+    pub fn moves(&self) -> &[Move] {
+        &self.moves[..self.cursor]
     }
 
     pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {
@@ -303,6 +315,8 @@ impl Game {
 
         let mut next = self.clone();
         next.states.truncate(self.cursor + 1);
+        next.moves.truncate(self.cursor);
+        next.moves.push(Move::Play(x, y));
         next.states.push(State {
             board,
             turn: opponent,
@@ -316,6 +330,8 @@ impl Game {
         let current = self.current();
         let mut next = self.clone();
         next.states.truncate(self.cursor + 1);
+        next.moves.truncate(self.cursor);
+        next.moves.push(Move::Pass);
         next.states.push(State {
             board: current.board.clone(),
             turn: current.turn.other(),
@@ -399,6 +415,7 @@ mod tests {
         Game {
             rules,
             states: vec![state(size, black, white, turn)],
+            moves: Vec::new(),
             cursor: 0,
         }
     }
@@ -420,6 +437,7 @@ mod tests {
                     Stone::White,
                 ),
             ],
+            moves: vec![Move::Play(2, 1)],
             cursor: 1,
         }
     }
@@ -437,6 +455,7 @@ mod tests {
             turn: Stone::White,
             last_move: None,
         });
+        game.moves = vec![Move::Play(2, 1), Move::Pass, Move::Pass];
         game.cursor = 3;
         game
     }
@@ -560,6 +579,7 @@ mod tests {
                     last_move: None,
                 },
             ],
+            moves: Vec::new(),
             cursor: 1,
         };
 
@@ -626,6 +646,21 @@ mod tests {
             ["中国", "日韩", "应氏"]
         );
         assert_eq!(Game::with_rules(9, Rules::Ing).rules(), Rules::Ing);
+    }
+
+    #[test]
+    fn records_play_and_pass_history() {
+        let game = Game::new(9).play(4, 4).unwrap();
+        assert_eq!(game.moves(), &[Move::Play(4, 4)]);
+
+        let game = game.pass();
+        assert_eq!(game.moves(), &[Move::Play(4, 4), Move::Pass]);
+
+        let undone = game.undo().unwrap();
+        assert_eq!(undone.moves(), &[Move::Play(4, 4)]);
+
+        let branched = undone.play(3, 3).unwrap();
+        assert_eq!(branched.moves(), &[Move::Play(4, 4), Move::Play(3, 3)]);
     }
 
     #[test]
