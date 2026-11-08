@@ -144,7 +144,20 @@ impl AnalysisUiState {
         if self.controller.has_pending() {
             return true;
         }
-        self.current.is_none() && self.controller.cached(&query).is_some()
+        if self.current.is_none() && self.controller.cached(&query).is_some() {
+            return true;
+        }
+        if self.panel_open && self.controller.pending_count() < 2 {
+            let total = session.game().all_moves().len();
+            if self.controller.cache().len() > total {
+                return false;
+            }
+            return (0..=total).any(|index| {
+                let query = session.analysis_query_at(index, self.max_visits);
+                self.controller.cached(&query).is_none()
+            });
+        }
+        false
     }
 
     pub fn tick(&mut self, session: &Session) {
@@ -186,6 +199,19 @@ impl AnalysisUiState {
         if self.current.is_none() {
             if let Some(snapshot) = self.controller.cached(&query) {
                 self.current = Some(snapshot);
+            }
+        }
+
+        if self.panel_open && self.controller.pending_count() < 2 {
+            let total = session.game().all_moves().len();
+            if self.controller.cache().len() < total + 1 {
+                for index in 0..=total {
+                    let query = session.analysis_query_at(index, self.max_visits);
+                    if self.controller.cached(&query).is_none() {
+                        let _ = self.controller.ensure(query);
+                        break;
+                    }
+                }
             }
         }
     }
