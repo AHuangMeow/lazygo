@@ -51,9 +51,9 @@ build() {
         -DCMAKE_CXX_FLAGS="-DBYTE_ORDER=__BYTE_ORDER__ -DLITTLE_ENDIAN=__ORDER_LITTLE_ENDIAN__ -DBIG_ENDIAN=__ORDER_BIG_ENDIAN__"
     cmake --build "$build" --target katago -j"$(nproc)"
 
-    mkdir -p "$DIST/$android_abi"
-    cp "$build/katago" "$DIST/$android_abi/libkatago.so"
-    "$STRIP" --strip-unneeded "$DIST/$android_abi/libkatago.so"
+    mkdir -p "$DIST/$abi"
+    cp "$build/katago" "$DIST/$abi/libkatago.so"
+    "$STRIP" --strip-unneeded "$DIST/$abi/libkatago.so"
 }
 
 for abi in ${KATAGO_ABIS:-arm64-v8a x86_64}; do
