@@ -18,6 +18,7 @@ pub struct PendingMove {
 pub struct Session {
     game: Game,
     started: bool,
+    pass_armed: bool,
     pending: Option<PendingMove>,
     size_open: bool,
     rule_open: bool,
@@ -37,6 +38,7 @@ impl Session {
         Self {
             game: Game::new(DEFAULT_SIZE),
             started: false,
+            pass_armed: false,
             pending: None,
             size_open: false,
             rule_open: false,
@@ -78,6 +80,10 @@ impl Session {
         self.started
     }
 
+    pub fn pass_armed(&self) -> bool {
+        self.pass_armed
+    }
+
     pub fn can_confirm(&self) -> bool {
         self.pending.is_some_and(|pending| pending.legal)
     }
@@ -117,6 +123,22 @@ impl Session {
         self.dismiss_overlays();
     }
 
+    pub fn toggle_pass(&mut self) {
+        if self.pass_armed {
+            self.pass_armed = false;
+            self.pass();
+        } else {
+            self.pass_armed = true;
+            self.size_open = false;
+            self.rule_open = false;
+            self.reset_armed = false;
+        }
+    }
+
+    pub fn cancel_pass(&mut self) {
+        self.pass_armed = false;
+    }
+
     pub fn pass(&mut self) {
         self.game = self.game.pass();
         self.started = true;
@@ -144,6 +166,7 @@ impl Session {
         self.reset_rotation += 360;
         self.size_open = false;
         self.rule_open = false;
+        self.pass_armed = false;
 
         if self.reset_armed {
             self.game = Game::with_rules(self.game.size(), self.game.rules());
@@ -195,6 +218,7 @@ impl Session {
         }
 
         self.rule_open = false;
+        self.pass_armed = false;
         self.size_open = !self.size_open;
     }
 
@@ -204,6 +228,7 @@ impl Session {
         }
 
         self.size_open = false;
+        self.pass_armed = false;
         self.rule_open = !self.rule_open;
     }
 
@@ -219,6 +244,7 @@ impl Session {
         self.size_open = false;
         self.rule_open = false;
         self.reset_armed = false;
+        self.pass_armed = false;
     }
 }
 
@@ -347,6 +373,48 @@ mod tests {
         session.toggle_reset();
 
         assert!(!session.settings_locked());
+    }
+
+    #[test]
+    fn pass_indicator_arms_then_passes() {
+        let mut session = Session::new();
+
+        session.toggle_pass();
+
+        assert!(session.pass_armed());
+        assert!(session.game().is_initial());
+        assert!(!session.settings_locked());
+
+        session.toggle_pass();
+
+        assert!(!session.pass_armed());
+        assert_eq!(session.game().turn(), Stone::White);
+        assert!(session.settings_locked());
+    }
+
+    #[test]
+    fn canceling_pass_leaves_the_game_untouched() {
+        let mut session = Session::new();
+
+        session.toggle_pass();
+        session.cancel_pass();
+
+        assert!(!session.pass_armed());
+        assert!(session.game().is_initial());
+        assert_eq!(session.game().turn(), Stone::Black);
+    }
+
+    #[test]
+    fn arming_pass_cancels_reset() {
+        let mut session = Session::new();
+
+        session.toggle_reset();
+        assert!(session.reset_armed());
+
+        session.toggle_pass();
+
+        assert!(session.pass_armed());
+        assert!(!session.reset_armed());
     }
 
     #[test]

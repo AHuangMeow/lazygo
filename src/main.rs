@@ -40,6 +40,12 @@ fn App() -> Element {
         style { "{MAIN_CSS}\n{font_face}" }
         main { class: "page",
             Topbar {}
+            if state.pass_armed() {
+                div {
+                    class: "pass-backdrop",
+                    onclick: move |_| session.write().cancel_pass(),
+                }
+            }
             if state.reset_armed() {
                 div {
                     class: "reset-backdrop",
@@ -57,7 +63,8 @@ fn App() -> Element {
                         div { class: "board-actions",
                             TurnIndicator {
                                 turn,
-                                on_pass: move |_| session.write().pass(),
+                                open: state.pass_armed(),
+                                on_click: move |_| session.write().toggle_pass(),
                             }
                             ResetButton {
                                 armed: state.reset_armed(),

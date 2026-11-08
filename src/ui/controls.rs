@@ -3,24 +3,34 @@ use lazygo::game::Stone;
 
 use crate::APP_ICON;
 
-fn indicator_stone(x: f64, stone: Stone) -> Element {
-    let (outer, inner) = match stone {
-        Stone::Black => ("indicator-black-outer", "indicator-black-inner"),
-        Stone::White => ("indicator-white-outer", "indicator-white-inner"),
+fn indicator_stone(x: f64, stone: Stone, visible: bool) -> Element {
+    let (group, outer, inner) = match stone {
+        Stone::Black => (
+            "indicator-black",
+            "indicator-black-outer",
+            "indicator-black-inner",
+        ),
+        Stone::White => (
+            "indicator-white",
+            "indicator-white-outer",
+            "indicator-white-inner",
+        ),
     };
 
     rsx! {
-        circle {
-            class: "{outer}",
-            cx: "{x}",
-            cy: "20",
-            r: "15",
-        }
-        circle {
-            class: "{inner}",
-            cx: "{x}",
-            cy: "20",
-            r: "13",
+        g { class: if visible { "{group}" } else { "{group} hidden" },
+            circle {
+                class: "{outer}",
+                cx: "{x}",
+                cy: "20",
+                r: "15",
+            }
+            circle {
+                class: "{inner}",
+                cx: "{x}",
+                cy: "20",
+                r: "13",
+            }
         }
     }
 }
@@ -30,6 +40,29 @@ pub enum HistoryDirection {
     Undo,
     Redo,
 }
+
+const HOLD_SCRIPT: &str = r#"
+    let holdTimer = null;
+    let repeatTimer = null;
+    const stop = () => {
+        clearTimeout(holdTimer);
+        clearInterval(repeatTimer);
+        holdTimer = null;
+        repeatTimer = null;
+    };
+    while (true) {
+        const command = await dioxus.recv();
+        if (command === "start") {
+            stop();
+            holdTimer = setTimeout(() => {
+                dioxus.send("tick");
+                repeatTimer = setInterval(() => dioxus.send("tick"), 70);
+            }, 350);
+        } else if (command === "stop") {
+            stop();
+        }
+    }
+"#;
 
 #[component]
 pub fn HistoryButton(
@@ -41,14 +74,66 @@ pub fn HistoryButton(
         HistoryDirection::Undo => ("Undo", "M15 6l-9 6 9 6z"),
         HistoryDirection::Redo => ("Redo", "M9 6l9 6-9 6z"),
     };
+    let mut pressing = use_signal(|| false);
+    let mut holding = use_signal(|| false);
+    let mut long_pressed = use_signal(|| false);
+    let eval = use_hook(move || {
+        let mut eval = document::eval(HOLD_SCRIPT);
+
+        spawn(async move {
+            while let Ok(message) = eval.recv::<String>().await {
+                if message == "tick" && pressing() {
+                    holding.set(true);
+                    long_pressed.set(true);
+                    on_click.call(());
+                }
+            }
+        });
+
+        eval
+    });
 
     rsx! {
         button {
-            class: "history-button",
+            class: if holding() { "history-button holding" } else { "history-button" },
             r#type: "button",
             aria_label: "{label}",
-            disabled: !enabled,
-            onclick: move |_| on_click.call(()),
+            disabled: !enabled && !pressing(),
+            onpointerdown: move |_| {
+                if !enabled {
+                    return;
+                }
+
+                pressing.set(true);
+                holding.set(false);
+                long_pressed.set(false);
+                let _ = eval.send("start");
+            },
+            onpointerup: move |_| {
+                pressing.set(false);
+                holding.set(false);
+                let _ = eval.send("stop");
+            },
+            onpointercancel: move |_| {
+                pressing.set(false);
+                holding.set(false);
+                let _ = eval.send("stop");
+            },
+            onpointerleave: move |_| {
+                if pressing() {
+                    pressing.set(false);
+                    holding.set(false);
+                    let _ = eval.send("stop");
+                }
+            },
+            oncontextmenu: move |event| event.prevent_default(),
+            onclick: move |_| {
+                if long_pressed() {
+                    long_pressed.set(false);
+                } else {
+                    on_click.call(());
+                }
+            },
             svg {
                 class: "history-icon",
                 view_box: "0 0 24 24",
@@ -87,23 +172,19 @@ pub fn Topbar() -> Element {
 }
 
 #[component]
-pub fn TurnIndicator(turn: Stone, on_pass: EventHandler<()>) -> Element {
-    let (back, front) = match turn {
-        Stone::Black => ((43.0, Stone::White), (21.0, Stone::Black)),
-        Stone::White => ((21.0, Stone::Black), (43.0, Stone::White)),
-    };
-
+pub fn TurnIndicator(turn: Stone, open: bool, on_click: EventHandler<()>) -> Element {
     rsx! {
         button {
-            class: "turn-indicator",
+            class: if open { "turn-indicator open" } else { "turn-indicator" },
             r#type: "button",
             aria_label: "Pass",
-            onclick: move |_| on_pass.call(()),
+            onclick: move |_| on_click.call(()),
             svg {
                 class: "turn-stones",
                 view_box: "6 0 52 40",
-                {indicator_stone(back.0, back.1)}
-                {indicator_stone(front.0, front.1)}
+                {indicator_stone(21.0, Stone::Black, true)}
+                {indicator_stone(43.0, Stone::White, true)}
+                {indicator_stone(21.0, Stone::Black, turn == Stone::Black)}
             }
         }
     }

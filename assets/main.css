@@ -270,6 +270,7 @@ body {
 }
 
 .turn-indicator {
+    position: relative;
     display: grid;
     place-items: center;
     width: 65px;
@@ -282,6 +283,10 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
+.turn-indicator.open {
+    z-index: 4;
+}
+
 .turn-indicator:focus-visible {
     outline: 2px solid var(--ctp-overlay0);
     outline-offset: 2px;
@@ -291,6 +296,25 @@ body {
     display: block;
     width: 65px;
     height: 50px;
+    overflow: visible;
+}
+
+.indicator-black,
+.indicator-white {
+    transform: translateX(0);
+    transition: transform 220ms ease;
+}
+
+.indicator-black.hidden {
+    opacity: 0;
+}
+
+.turn-indicator.open .indicator-black {
+    transform: translateX(-6px);
+}
+
+.turn-indicator.open .indicator-white {
+    transform: translateX(6px);
 }
 
 .indicator-black-outer {
@@ -360,6 +384,16 @@ body {
     fill: var(--ctp-red);
 }
 
+.history-button {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.history-button.holding {
+    color: var(--ctp-text);
+}
+
 .history-button:hover:not(:disabled) {
     color: var(--ctp-text);
 }
@@ -416,6 +450,7 @@ body {
     outline-offset: 2px;
 }
 
+.pass-backdrop,
 .reset-backdrop {
     position: fixed;
     inset: 0;

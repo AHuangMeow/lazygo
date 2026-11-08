@@ -141,17 +141,15 @@ pub fn Board(
                     if let Some(stone) = game.stone_at(x, y) {
                         {stone_node(x, y, stone, last_move == Some((x, y)))}
                     }
-                    if let Some(pending) = pending {
-                        if pending.x == x && pending.y == y {
-                            {stone_node(x, y, game.turn(), false)}
-                            circle {
-                                class: if pending.legal { "pending-frame" } else { "pending-frame illegal" },
-                                cx: "{x}",
-                                cy: "{y}",
-                                r: "{PENDING_FRAME_RADIUS}",
-                            }
-                        }
-                    }
+                }
+            }
+            if let Some(pending) = pending {
+                {stone_node(pending.x, pending.y, game.turn(), false)}
+                circle {
+                    class: if pending.legal { "pending-frame" } else { "pending-frame illegal" },
+                    cx: "{pending.x}",
+                    cy: "{pending.y}",
+                    r: "{PENDING_FRAME_RADIUS}",
                 }
             }
         }
