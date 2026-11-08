@@ -1,5 +1,8 @@
 [application]
 
+[android]
+min_sdk = 29
+
 [web.app]
 title = "lazygo"
 

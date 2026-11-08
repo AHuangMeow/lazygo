@@ -25,6 +25,20 @@ fn main() {
     let mut res_dirs = Vec::new();
     find_res_dirs(&target_dir.join("dx"), &mut res_dirs);
 
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let abi = match arch.as_str() {
+        "aarch64" => Some("arm64-v8a"),
+        "x86_64" => Some("x86_64"),
+        _ => None,
+    };
+    let engine = abi.map(|abi| {
+        manifest_dir
+            .join("target")
+            .join("katago-dist")
+            .join(abi)
+            .join("libkatago.so")
+    });
+
     for res_dir in &res_dirs {
         if has_icons {
             copy_tree(&source, res_dir);
@@ -38,6 +52,26 @@ fn main() {
 
     if has_icons {
         println!("cargo:rerun-if-changed=android/res");
+    }
+
+    if let Some(engine) = engine {
+        if engine.exists() {
+            let mut jni_dirs = Vec::new();
+            find_jni_dirs(&target_dir.join("dx"), &mut jni_dirs);
+
+            for jni_dir in &jni_dirs {
+                let destination = jni_dir.join(abi.unwrap());
+                let _ = fs::create_dir_all(&destination);
+                let _ = fs::copy(&engine, destination.join("libkatago.so"));
+            }
+
+            println!("cargo:rerun-if-changed={}", engine.display());
+        } else {
+            println!(
+                "cargo:warning=KataGo engine missing at {}; analysis will be disabled",
+                engine.display()
+            );
+        }
     }
 
     for res_dir in &res_dirs {
@@ -62,6 +96,29 @@ fn set_portrait(manifest: &Path) {
 
     if updated != contents {
         let _ = fs::write(manifest, updated);
+    }
+}
+
+fn find_jni_dirs(dir: &Path, found: &mut Vec<PathBuf>) {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        if path.ends_with("android/app/app/src/main/jniLibs")
+            || path.ends_with("android/app/src/main/jniLibs")
+        {
+            found.push(path);
+        } else {
+            find_jni_dirs(&path, found);
+        }
     }
 }
 
