@@ -79,11 +79,7 @@ fn App() -> Element {
             }
         }
     }
-    if !current_matches
-        && current_index > 0
-        && current_index < chart.len()
-        && chart[current_index].is_none()
-    {
+    if current_index > 0 && current_index < chart.len() && chart[current_index].is_none() {
         // Keep the new turn visible while KataGo is still evaluating it.
         if let Some(previous) = chart[..current_index]
             .iter()
