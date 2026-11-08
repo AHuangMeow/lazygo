@@ -253,7 +253,6 @@ pub fn SettingsPage(
                 p { class: "settings-error", "{message}" }
             }
 
-            div { class: "settings-divider settings-divider-footer" }
             footer { class: "settings-footer",
                 "KataGo v1.18.2 · Eigen CPU"
             }

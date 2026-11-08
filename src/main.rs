@@ -185,7 +185,6 @@ fn App() -> Element {
                             enabled: analysis_enabled,
                             perspective,
                             mode,
-                            current: current_snapshot,
                             error: analysis_error,
                             chart,
                             current_index,

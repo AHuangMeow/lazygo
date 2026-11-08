@@ -214,6 +214,7 @@ fn snapshot(result: &AnalysisResult) -> AnalysisSnapshot {
         .as_ref()
         .map(|matrix| matrix.raw.iter().map(|value| *value as f32).collect())
         .unwrap_or_default();
+    let ownership = black_perspective_ownership(current_player, ownership);
 
     let best_move = result.move_infos.first().and_then(|info| match info.mv {
         KataMove::Move(Coord(x, y)) => Some((x as usize, y as usize)),
@@ -237,6 +238,15 @@ fn black_perspective(current_player: Stone, winrate: f64, score_lead: f64) -> (f
     }
 }
 
+fn black_perspective_ownership(current_player: Stone, mut ownership: Vec<f32>) -> Vec<f32> {
+    if current_player == Stone::White {
+        for value in &mut ownership {
+            *value = -*value;
+        }
+    }
+    ownership
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,6 +264,18 @@ mod tests {
         let (winrate, score) = black_perspective(Stone::White, 0.6, 3.0);
         assert!((winrate - 0.4).abs() < f32::EPSILON);
         assert!((score + 3.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn normalizes_ownership_to_black_perspective() {
+        assert_eq!(
+            black_perspective_ownership(Stone::Black, vec![0.5, -0.25]),
+            vec![0.5, -0.25]
+        );
+        assert_eq!(
+            black_perspective_ownership(Stone::White, vec![0.5, -0.25]),
+            vec![-0.5, 0.25]
+        );
     }
 
     #[test]

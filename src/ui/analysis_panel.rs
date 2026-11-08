@@ -6,10 +6,10 @@ use super::{AnalysisMode, ModeToggle, PerspectiveToggle};
 
 const WIDTH: f64 = 320.0;
 const HEIGHT: f64 = 168.0;
-const LEFT: f64 = 34.0;
+const LEFT: f64 = 20.0;
 const RIGHT: f64 = 6.0;
-const TOP: f64 = 12.0;
-const BOTTOM: f64 = 12.0;
+const TOP: f64 = 14.0;
+const BOTTOM: f64 = 14.0;
 const PLOT_WIDTH: f64 = WIDTH - LEFT - RIGHT;
 const PLOT_HEIGHT: f64 = HEIGHT - TOP - BOTTOM;
 
@@ -67,9 +67,13 @@ fn AnalysisChart(
         AnalysisMode::Winrate => &[100.0, 75.0, 50.0, 25.0, 0.0],
         AnalysisMode::Score => &[10.0, 5.0, 0.0, -5.0, -10.0],
     };
-    let current = snapshots
-        .get(current_index)
-        .and_then(|snapshot| snapshot.as_ref());
+    let current = (current_index > 0)
+        .then(|| {
+            snapshots
+                .get(current_index)
+                .and_then(|snapshot| snapshot.as_ref())
+        })
+        .flatten();
 
     rsx! {
         svg {
@@ -93,7 +97,7 @@ fn AnalysisChart(
             for value in labels {
                 text {
                     class: "chart-label",
-                    x: "{LEFT - 6.0}",
+                    x: "{LEFT - 4.0}",
                     y: "{y_for(*value)}",
                     text_anchor: "end",
                     dominant_baseline: "middle",
@@ -101,39 +105,41 @@ fn AnalysisChart(
                 }
             }
             for (index, snapshot) in snapshots.iter().enumerate() {
-                if let Some(snapshot) = snapshot {
-                    {
-                        let value = point_value(snapshot, perspective, mode);
-                        let x = x_for(index);
-                        let y = y_for(value);
-                        let pass = is_pass(&moves, index);
-                        rsx! {
-                            g {
-                                class: "chart-point-group",
-                                circle {
-                                    class: "chart-hit",
-                                    cx: "{x}",
-                                    cy: "{y}",
-                                    r: "9",
-                                    onclick: move |_| on_replay.call(index),
-                                }
-                                if pass {
-                                    text {
-                                        class: "chart-pass",
-                                        x: "{x}",
-                                        y: "{y}",
-                                        text_anchor: "middle",
-                                        dominant_baseline: "middle",
-                                        onclick: move |_| on_replay.call(index),
-                                        "p"
-                                    }
-                                } else {
+                if index > 0 {
+                    if let Some(snapshot) = snapshot {
+                        {
+                            let value = point_value(snapshot, perspective, mode);
+                            let x = x_for(index);
+                            let y = y_for(value);
+                            let pass = is_pass(&moves, index);
+                            rsx! {
+                                g {
+                                    class: "chart-point-group",
                                     circle {
-                                        class: "chart-point",
+                                        class: "chart-hit",
                                         cx: "{x}",
                                         cy: "{y}",
-                                        r: "3.2",
+                                        r: "9",
                                         onclick: move |_| on_replay.call(index),
+                                    }
+                                    if pass {
+                                        text {
+                                            class: "chart-pass",
+                                            x: "{x}",
+                                            y: "{y}",
+                                            text_anchor: "middle",
+                                            dominant_baseline: "middle",
+                                            onclick: move |_| on_replay.call(index),
+                                            "p"
+                                        }
+                                    } else {
+                                        circle {
+                                            class: "chart-point",
+                                            cx: "{x}",
+                                            cy: "{y}",
+                                            r: "3.2",
+                                            onclick: move |_| on_replay.call(index),
+                                        }
                                     }
                                 }
                             }
@@ -183,7 +189,6 @@ pub fn AnalysisPanel(
     enabled: bool,
     perspective: Stone,
     mode: AnalysisMode,
-    current: Option<AnalysisSnapshot>,
     error: Option<String>,
     chart: Vec<Option<AnalysisSnapshot>>,
     current_index: usize,
@@ -229,8 +234,6 @@ pub fn AnalysisPanel(
                     }
                     if let Some(error) = error {
                         span { class: "analysis-error", "{error}" }
-                    } else if current.is_none() {
-                        span { class: "analysis-status", "分析中…" }
                     }
                 }
             }
