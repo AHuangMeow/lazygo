@@ -99,8 +99,8 @@ jobs:
             echo "KataGo engine is missing from the APK" >&2
             exit 1
           }
-          "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep "minSdkVersion"
-          "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep -q "minSdkVersion:'29'"
+          "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep "sdkVersion"
+          "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep -q "sdkVersion:'29'"
           "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs "$APK"
           ASSET="lazygo-${GITHUB_REF_NAME//\//-}.apk"
           cp "$APK" "$ASSET"
