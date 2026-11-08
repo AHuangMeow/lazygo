@@ -76,7 +76,9 @@ jobs:
           KATAGO_ABIS=arm64-v8a ./scripts/build-katago-android.sh
 
       - name: Build release APK
-        run: dx build --android --release --target aarch64-linux-android
+        run: |
+          cargo clean -p lazygo
+          dx build --android --release --target aarch64-linux-android
 
       - name: Verify release APK
         run: |
