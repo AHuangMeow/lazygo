@@ -103,15 +103,16 @@ impl Session {
         self.pending.is_some_and(|pending| pending.legal)
     }
 
+    pub fn cancel_pending(&mut self) {
+        self.pending = None;
+    }
+
     pub fn select(&mut self, x: usize, y: usize) {
         if self.game.is_replaying() || x >= self.game.size() || y >= self.game.size() {
             return;
         }
 
-        if self
-            .pending
-            .is_some_and(|pending| pending.x == x && pending.y == y)
-        {
+        if self.pending.is_some() {
             self.pending = None;
         } else if self.game.stone_at(x, y).is_none() {
             let legal = self.game.play(x, y).is_some();
@@ -338,6 +339,17 @@ mod tests {
 
         session.select(4, 4);
         session.select(4, 4);
+
+        assert!(session.pending().is_none());
+        assert!(!session.can_confirm());
+    }
+
+    #[test]
+    fn tapping_another_point_cancels_pending() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.select(3, 3);
 
         assert!(session.pending().is_none());
         assert!(!session.can_confirm());

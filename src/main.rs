@@ -112,6 +112,12 @@ fn App() -> Element {
                         onclick: move |_| session.write().cancel_reset(),
                     }
                 }
+                if pending.is_some() && !state.pass_armed() && !state.reset_armed() {
+                    div {
+                        class: "pending-backdrop",
+                        onclick: move |_| session.write().cancel_pending(),
+                    }
+                }
             }
             if settings_open {
                 SettingsPage {
@@ -127,6 +133,7 @@ fn App() -> Element {
                         pending,
                         ownership,
                         on_select: move |(x, y)| session.write().select(x, y),
+                        on_cancel: move |_| session.write().cancel_pending(),
                     }
                     div { class: "board-footer",
                         div { class: "board-actions",

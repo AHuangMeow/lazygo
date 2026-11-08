@@ -49,20 +49,50 @@ fn board_point(
         return None;
     }
 
-    if client_x < left || client_x > left + width || client_y < top || client_y > top + height {
-        return None;
-    }
-
     let x = (client_x - left) / width * max as f64;
     let y = (client_y - top) / height * max as f64;
     let nearest_x = x.round();
     let nearest_y = y.round();
 
+    if !(0.0..=max as f64).contains(&nearest_x) || !(0.0..=max as f64).contains(&nearest_y) {
+        return None;
+    }
     if (x - nearest_x).powi(2) + (y - nearest_y).powi(2) > HIT_RADIUS.powi(2) {
         return None;
     }
 
     Some((nearest_x as usize, nearest_y as usize))
+}
+
+fn handle_board_click(
+    event: Event<MouseData>,
+    max: usize,
+    on_select: EventHandler<(usize, usize)>,
+    on_cancel: EventHandler<()>,
+) {
+    let client = event.data().client_coordinates();
+    spawn(async move {
+        let mut eval = document::eval(
+            r#"
+            const rect = document.querySelector(".board").getBoundingClientRect();
+            dioxus.send(`${rect.left},${rect.top},${rect.width},${rect.height}`);
+            "#,
+        );
+        let Ok(value) = eval.recv::<String>().await else {
+            return;
+        };
+        let mut parts = value.split(',').filter_map(|part| part.parse::<f64>().ok());
+        let (Some(left), Some(top), Some(width), Some(height)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return;
+        };
+        if let Some(point) = board_point(client.x, client.y, left, top, width, height, max) {
+            on_select.call(point);
+        } else {
+            on_cancel.call(());
+        }
+    });
 }
 
 #[component]
@@ -71,6 +101,7 @@ pub fn Board(
     pending: Option<PendingMove>,
     ownership: Option<Vec<f32>>,
     on_select: EventHandler<(usize, usize)>,
+    on_cancel: EventHandler<()>,
 ) -> Element {
     let size = game.size();
     let max = size - 1;
@@ -102,34 +133,10 @@ pub fn Board(
         .unwrap_or_default();
 
     rsx! {
-        svg {
-            class: "board",
-            view_box: "0 0 {max} {max}",
-            onclick: move |event| {
-                let client = event.data().client_coordinates();
-                spawn(async move {
-                    let mut eval = document::eval(
-                        r#"
-                        const rect = document.querySelector(".board").getBoundingClientRect();
-                        dioxus.send(`${rect.left},${rect.top},${rect.width},${rect.height}`);
-                        "#,
-                    );
-                    let Ok(value) = eval.recv::<String>().await else {
-                        return;
-                    };
-                    let mut parts = value.split(',').filter_map(|part| part.parse::<f64>().ok());
-                    let (Some(left), Some(top), Some(width), Some(height)) =
-                        (parts.next(), parts.next(), parts.next(), parts.next())
-                    else {
-                        return;
-                    };
-                    if let Some(point) =
-                        board_point(client.x, client.y, left, top, width, height, max)
-                    {
-                        on_select.call(point);
-                    }
-                });
-            },
+        div { class: "board-frame",
+            svg {
+                class: "board",
+                view_box: "0 0 {max} {max}",
             for index in 0..=max {
                 line {
                     class: "board-line",
@@ -202,6 +209,11 @@ pub fn Board(
                     r: "{PENDING_FRAME_RADIUS}",
                 }
             }
+            }
+            div {
+                class: "board-hit-layer",
+                onclick: move |event| handle_board_click(event, max, on_select, on_cancel),
+            }
         }
     }
 }
@@ -219,8 +231,24 @@ mod tests {
     }
 
     #[test]
-    fn hit_test_ignores_gaps_and_outside_taps() {
+    fn hit_test_ignores_gaps_and_far_outside_taps() {
         assert_eq!(board_point(450.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
-        assert_eq!(board_point(-1.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
+        assert_eq!(board_point(-100.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
+    }
+
+    #[test]
+    fn hit_test_uses_full_circles_at_edges_and_corners() {
+        assert_eq!(
+            board_point(-1.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((0, 4))
+        );
+        assert_eq!(
+            board_point(-1.0, -1.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((0, 0))
+        );
+        assert_eq!(
+            board_point(801.0, 801.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((8, 8))
+        );
     }
 }
