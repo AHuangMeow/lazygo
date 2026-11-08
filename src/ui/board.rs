@@ -6,18 +6,19 @@ const STAR_RADIUS: f64 = 50.0 / 304.0;
 const HIT_RADIUS: f64 = 0.36;
 const STONE_OUTER_RADIUS: f64 = 0.46;
 const STONE_INNER_RADIUS: f64 = 0.40;
-const MOVE_DOT_RADIUS: f64 = 0.12;
 const PENDING_FRAME_RADIUS: f64 = 0.54;
+const LAST_MOVE_RING_RADIUS: f64 = 0.34;
+const LAST_MOVE_RING_WIDTH: f64 = 0.06;
 
-fn stone_classes(stone: Stone) -> (&'static str, &'static str, &'static str) {
+fn stone_classes(stone: Stone) -> (&'static str, &'static str) {
     match stone {
-        Stone::Black => ("stone-black-outer", "stone-black-inner", "move-dot-black"),
-        Stone::White => ("stone-white-outer", "stone-white-inner", "move-dot-white"),
+        Stone::Black => ("stone-black-outer", "stone-black-inner"),
+        Stone::White => ("stone-white-outer", "stone-white-inner"),
     }
 }
 
-fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
-    let (outer, inner, dot) = stone_classes(stone);
+fn stone_node(x: usize, y: usize, stone: Stone) -> Element {
+    let (outer, inner) = stone_classes(stone);
 
     rsx! {
         circle {
@@ -31,14 +32,6 @@ fn stone_node(x: usize, y: usize, stone: Stone, last_move: bool) -> Element {
             cx: "{x}",
             cy: "{y}",
             r: "{STONE_INNER_RADIUS}",
-        }
-        if last_move {
-            circle {
-                class: "{dot}",
-                cx: "{x}",
-                cy: "{y}",
-                r: "{MOVE_DOT_RADIUS}",
-            }
         }
     }
 }
@@ -83,21 +76,25 @@ pub fn Board(
     let max = size - 1;
     let stars = star_points(size);
     let last_move = game.last_move();
-    let ownership_dots: Vec<(f64, f64, bool, f32)> = ownership
+    let ownership_dots: Vec<(f64, f64, bool, bool, f32)> = ownership
         .as_ref()
         .map(|ownership| {
             let mut dots = Vec::new();
             for y in 0..=max {
                 for x in 0..=max {
-                    if game.stone_at(x, y).is_some() {
-                        continue;
-                    }
                     let value = ownership.get(y * size + x).copied().unwrap_or(0.0);
                     if value.abs() < 0.05 {
                         continue;
                     }
                     let opacity = 0.20 + 0.60 * value.abs().min(1.0);
-                    dots.push((x as f64 - 0.15, y as f64 - 0.15, value > 0.0, opacity));
+                    let on_stone = game.stone_at(x, y).is_some();
+                    dots.push((
+                        x as f64 - 0.15,
+                        y as f64 - 0.15,
+                        value > 0.0,
+                        on_stone,
+                        opacity,
+                    ));
                 }
             }
             dots
@@ -157,9 +154,22 @@ pub fn Board(
                     r: "{STAR_RADIUS}",
                 }
             }
-            for (dot_x, dot_y, black, opacity) in ownership_dots {
+            for y in 0..=max {
+                for x in 0..=max {
+                    if let Some(stone) = game.stone_at(x, y) {
+                        {stone_node(x, y, stone)}
+                    }
+                }
+            }
+            for (dot_x, dot_y, black, on_stone, opacity) in ownership_dots {
                 rect {
-                    class: if black { "ownership-dot black" } else { "ownership-dot white" },
+                    class: if black {
+                        if on_stone { "ownership-dot black on-stone" } else { "ownership-dot black" }
+                    } else if on_stone {
+                        "ownership-dot white on-stone"
+                    } else {
+                        "ownership-dot white"
+                    },
                     x: "{dot_x}",
                     y: "{dot_y}",
                     width: "0.30",
@@ -168,15 +178,23 @@ pub fn Board(
                     style: "opacity: {opacity:.3};",
                 }
             }
-            for y in 0..=max {
-                for x in 0..=max {
-                    if let Some(stone) = game.stone_at(x, y) {
-                        {stone_node(x, y, stone, last_move == Some((x, y)))}
+            if let Some((x, y)) = last_move {
+                if let Some(stone) = game.stone_at(x, y) {
+                    circle {
+                        class: if stone == Stone::Black {
+                            "last-move-ring black"
+                        } else {
+                            "last-move-ring white"
+                        },
+                        cx: "{x}",
+                        cy: "{y}",
+                        r: "{LAST_MOVE_RING_RADIUS}",
+                        stroke_width: "{LAST_MOVE_RING_WIDTH}",
                     }
                 }
             }
             if let Some(pending) = pending {
-                {stone_node(pending.x, pending.y, game.turn(), false)}
+                {stone_node(pending.x, pending.y, game.turn())}
                 circle {
                     class: if pending.legal { "pending-frame" } else { "pending-frame illegal" },
                     cx: "{pending.x}",

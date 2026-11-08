@@ -208,7 +208,7 @@ pub struct AnalysisSettings {
 
 impl Default for AnalysisSettings {
     fn default() -> Self {
-        Self { max_visits: 100 }
+        Self { max_visits: 200 }
     }
 }
 
@@ -316,6 +316,11 @@ mod tests {
         assert_eq!(sanitize_model_name("b6c96.bin.gz"), "b6c96.bin.gz");
         assert_eq!(sanitize_model_name("../my model"), "my_model.bin.gz");
         assert_eq!(sanitize_model_name("model"), "model.bin.gz");
+    }
+
+    #[test]
+    fn default_analysis_depth_is_200() {
+        assert_eq!(AnalysisSettings::default().max_visits, 200);
     }
 
     #[test]

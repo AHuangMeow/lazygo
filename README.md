@@ -12,11 +12,13 @@ LazyGo bundles a stripped **KataGo v1.18.2 Eigen CPU** engine for `arm64-v8a`
 2. Open **设置 → 模型 → 导入模型** and choose the file.
 3. The model is validated once with KataGo, then stored in the app's private
    storage. Analysis is enabled after a valid model is imported.
-4. Set the analysis depth in **设置 → 分析深度**. The default is 100 visits.
+4. Set the analysis depth in **设置 → 分析深度**. The default is 200 visits.
 
 Analysis starts after every confirmed move and is cached by position, rules,
 komi, depth, and model. The analysis panel is opened from the **分析** button
-below the board.
+below the board. Undo and redo only move through analyzed positions; while
+replaying, placing stones is disabled. Click any point in the chart to jump to
+that turn.
 
 The app is fully offline at runtime; model import uses the Android file picker
 and does not download anything.

@@ -49,7 +49,8 @@ fn App() -> Element {
     let can_undo = current.can_undo();
     let can_redo = current.can_redo();
     let game = current.clone();
-    let current_index = game.moves().len();
+    let current_index = game.cursor();
+    let move_history = game.all_moves().to_vec();
     let (analysis_enabled, analysis_open, perspective, mode, current_snapshot, analysis_error) = {
         let analysis = analysis.read();
         (
@@ -89,7 +90,15 @@ fn App() -> Element {
     rsx! {
         style { "{MAIN_CSS}\n{font_face}" }
         main { class: "page",
-            Topbar { on_settings: move |_| page.set(Page::Settings) }
+            Topbar {
+                on_settings: move |_| {
+                    page.set(if page() == Page::Settings {
+                        Page::Game
+                    } else {
+                        Page::Settings
+                    });
+                },
+            }
             if !settings_open {
                 if state.pass_armed() {
                     div {
@@ -107,9 +116,6 @@ fn App() -> Element {
             if settings_open {
                 SettingsPage {
                     max_visits,
-                    analysis_enabled,
-                    analysis_error,
-                    on_back: move |_| page.set(Page::Game),
                     on_changed: move |_| analysis.write().reload(),
                     on_depth: move |value| analysis.write().set_max_visits(value),
                 }
@@ -183,10 +189,11 @@ fn App() -> Element {
                             error: analysis_error,
                             chart,
                             current_index,
-                            max_visits,
+                            moves: move_history,
                             on_toggle: move |_| analysis.write().toggle_panel(),
                             on_perspective: move |_| analysis.write().toggle_perspective(),
                             on_mode: move |_| analysis.write().toggle_mode(),
+                            on_replay: move |turn| session.write().replay_to(turn),
                         }
                     }
                 }

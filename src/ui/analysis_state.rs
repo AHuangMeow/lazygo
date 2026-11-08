@@ -198,12 +198,10 @@ impl AnalysisUiState {
             return Vec::new();
         };
 
-        let base = session.analysis_query(self.max_visits);
-        let moves = session.game().moves();
-        (0..=moves.len())
+        let total = session.game().all_moves().len();
+        (0..=total)
             .map(|index| {
-                let mut query = base.clone();
-                query.moves = moves[..index].to_vec();
+                let query = session.analysis_query_at(index, self.max_visits);
                 let key = AnalysisKey::new(&query, model_id);
                 self.controller.cache().get(&key).cloned()
             })

@@ -238,24 +238,47 @@ pub fn ConfirmButton(enabled: bool, on_click: EventHandler<()>) -> Element {
 
 #[component]
 pub fn PerspectiveToggle(perspective: Stone, on_click: EventHandler<()>) -> Element {
+    let (outer, inner) = match perspective {
+        Stone::Black => ("indicator-black-outer", "indicator-black-inner"),
+        Stone::White => ("indicator-white-outer", "indicator-white-inner"),
+    };
+
     rsx! {
         button {
             class: "perspective-toggle",
             r#type: "button",
-            aria_label: "切换黑白视角",
+            aria_label: if perspective == Stone::Black {
+                "切换到白方视角"
+            } else {
+                "切换到黑方视角"
+            },
             onclick: move |_| on_click.call(()),
             svg {
-                class: "turn-stones",
-                view_box: "6 0 52 40",
-                {indicator_stone_dim(21.0, Stone::Black, true, perspective != Stone::Black)}
-                {indicator_stone_dim(43.0, Stone::White, true, perspective != Stone::White)}
+                class: "perspective-stone",
+                view_box: "0 0 40 40",
+                circle {
+                    class: "{outer}",
+                    cx: "20",
+                    cy: "20",
+                    r: "16",
+                }
+                circle {
+                    class: "{inner}",
+                    cx: "20",
+                    cy: "20",
+                    r: "14",
+                }
             }
         }
     }
 }
 
 #[component]
-pub fn ModeToggle(mode: crate::ui::AnalysisMode, on_click: EventHandler<()>) -> Element {
+pub fn ModeToggle(
+    mode: crate::ui::AnalysisMode,
+    perspective: Stone,
+    on_click: EventHandler<()>,
+) -> Element {
     let winrate = mode == crate::ui::AnalysisMode::Winrate;
 
     rsx! {
@@ -267,7 +290,13 @@ pub fn ModeToggle(mode: crate::ui::AnalysisMode, on_click: EventHandler<()>) -> 
             if winrate {
                 span { class: "mode-percent", "%" }
             } else {
-                span { class: "mode-score-glyph" }
+                span {
+                    class: if perspective == Stone::Black {
+                        "mode-score-glyph black"
+                    } else {
+                        "mode-score-glyph white"
+                    },
+                }
             }
         }
     }

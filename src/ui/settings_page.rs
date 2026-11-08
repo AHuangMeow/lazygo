@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dioxus::prelude::*;
 use lazygo::analysis::{
-    active_model, import_model, models, remove_model, select_model, validate_model, ModelInfo,
+    active_model, import_model, models, select_model, validate_model, ModelInfo,
 };
 
 const PICK_MODEL_SCRIPT: &str = r#"
@@ -58,117 +58,82 @@ struct PickedModel {
     error: Option<String>,
 }
 
-fn format_size(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 {
-        format!("{:.1} MB", bytes as f64 / 1024.0 / 1024.0)
-    } else {
-        format!("{:.0} KB", bytes as f64 / 1024.0)
-    }
-}
-
 #[component]
 pub fn SettingsPage(
     max_visits: u32,
-    analysis_enabled: bool,
-    analysis_error: Option<String>,
-    on_back: EventHandler<()>,
     on_changed: EventHandler<()>,
     on_depth: EventHandler<u32>,
 ) -> Element {
     let mut model_list = use_signal(models);
     let mut active = use_signal(|| active_model().map(|model| model.id));
-    let mut status = use_signal(|| None::<String>);
+    let mut menu_open = use_signal(|| false);
     let mut busy = use_signal(|| false);
-    let mut delete_armed = use_signal(|| None::<String>);
+    let mut status = use_signal(|| None::<String>);
     let mut depth = use_signal(|| max_visits);
-    let current_depth = depth();
-    let active_id = active();
+
     let model_items: Vec<ModelInfo> = model_list();
+    let active_id = active();
+    let active_name = active_id
+        .as_deref()
+        .and_then(|id| model_items.iter().find(|model| model.id == id))
+        .map(|model| model.name.as_str())
+        .unwrap_or("未选择模型");
+    let current_depth = depth();
 
     rsx! {
         section { class: "settings-page",
-            div { class: "settings-heading",
-                button {
-                    class: "settings-back",
-                    r#type: "button",
-                    aria_label: "返回",
-                    onclick: move |_| on_back.call(()),
-                    svg {
-                        class: "settings-back-icon",
-                        view_box: "0 0 24 24",
-                        path { d: "M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" }
-                    }
-                }
-                div {
-                    h1 { class: "settings-title", "设置" }
-                    p { class: "settings-subtitle", "模型与分析" }
-                }
-            }
+            h1 { class: "settings-page-title", "模型与分析" }
+            div { class: "settings-divider" }
 
-            div { class: "settings-card",
-                div { class: "settings-card-heading",
-                    h2 { "分析引擎" }
-                    span {
-                        class: if analysis_enabled { "status-pill enabled" } else { "status-pill" },
-                        if analysis_enabled { "已启用" } else { "未启用" }
-                    }
-                }
-                p { class: "settings-note",
-                    if analysis_enabled {
-                        "已加载模型，落子后会自动分析并缓存。"
-                    } else {
-                        "导入有效的 KataGo .bin.gz 模型后，分析功能自动启用。"
-                    }
-                }
-                if let Some(error) = analysis_error {
-                    p { class: "settings-error", "{error}" }
-                }
-            }
-
-            div { class: "settings-card",
-                div { class: "settings-card-heading",
-                    h2 { "分析深度" }
-                    span { class: "settings-value", "{current_depth} visits" }
-                }
-                p { class: "settings-note", "深度越高，结果越稳定，也越耗电、耗时。" }
-                div { class: "depth-presets",
-                    for preset in [50_u32, 100, 200, 500] {
+            div { class: "settings-row",
+                span { class: "settings-label", "模型" }
+                span { class: "settings-leader" }
+                div { class: "settings-control",
+                    div { class: "model-select",
                         button {
-                            class: if current_depth == preset { "depth-preset selected" } else { "depth-preset" },
+                            class: "model-select-trigger",
                             r#type: "button",
-                            onclick: move |_| {
-                                depth.set(preset);
-                                on_depth.call(preset);
-                            },
-                            "{preset}"
+                            aria_expanded: menu_open(),
+                            onclick: move |_| menu_open.toggle(),
+                            span { class: "model-select-label", "{active_name}" }
+                            span { class: "chevron" }
+                        }
+                        if menu_open() {
+                            div { class: "model-options",
+                                button {
+                                    class: "model-option disabled",
+                                    r#type: "button",
+                                    disabled: true,
+                                    "不使用模型"
+                                }
+                                for model in model_items.iter() {
+                                    {
+                                        let id = model.id.clone();
+                                        let selected = active_id.as_deref() == Some(id.as_str());
+                                        rsx! {
+                                            button {
+                                                class: if selected { "model-option selected" } else { "model-option" },
+                                                r#type: "button",
+                                                onclick: move |_| {
+                                                    match select_model(&id) {
+                                                        Ok(()) => {
+                                                            active.set(Some(id.clone()));
+                                                            menu_open.set(false);
+                                                            on_changed.call(());
+                                                        }
+                                                        Err(error) => status.set(Some(error)),
+                                                    }
+                                                },
+                                                "{model.name}"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-                div { class: "depth-input-row",
-                    input {
-                        class: "depth-input",
-                        r#type: "number",
-                        min: "1",
-                        max: "5000",
-                        step: "10",
-                        value: "{current_depth}",
-                        onchange: move |event| {
-                            if let Ok(value) = event.value().parse::<u32>() {
-                                let value = value.clamp(1, 5000);
-                                depth.set(value);
-                                on_depth.call(value);
-                            }
-                        },
-                    }
-                    span { "visits" }
-                }
-            }
-
-            div { class: "settings-card",
-                div { class: "settings-card-heading",
-                    h2 { "模型" }
                     button {
-                        class: "primary-button",
+                        class: "settings-import",
                         r#type: "button",
                         disabled: busy(),
                         onclick: move |_| {
@@ -176,14 +141,14 @@ pub fn SettingsPage(
                                 return;
                             }
                             busy.set(true);
-                            status.set(Some("正在打开文件选择器…".into()));
+                            status.set(None);
                             spawn(async move {
                                 let mut eval = document::eval(PICK_MODEL_SCRIPT);
                                 let message = match eval.recv::<String>().await {
                                     Ok(message) => message,
-                                    Err(error) => {
+                                    Err(_) => {
                                         busy.set(false);
-                                        status.set(Some(format!("文件选择失败: {error}")));
+                                        status.set(Some("文件选择失败".into()));
                                         return;
                                     }
                                 };
@@ -192,7 +157,7 @@ pub fn SettingsPage(
                                     Ok(picked) => picked,
                                     Err(_) => {
                                         busy.set(false);
-                                        status.set(Some("无法解析所选文件".into()));
+                                        status.set(Some("无法读取所选文件".into()));
                                         return;
                                     }
                                 };
@@ -223,7 +188,6 @@ pub fn SettingsPage(
 
                                 match import_model(&name, &bytes) {
                                     Ok(model) => {
-                                        status.set(Some("正在验证模型…".into()));
                                         let path = model.path.clone();
                                         let (sender, receiver) = std::sync::mpsc::channel();
                                         std::thread::spawn(move || {
@@ -239,19 +203,15 @@ pub fn SettingsPage(
                                                     .await;
                                                 }
                                                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                                                    break Err("模型校验线程异常退出".into());
+                                                    break Err("模型校验异常".into());
                                                 }
                                             }
                                         };
 
                                         if let Err(error) = validation {
-                                            let _ = remove_model(&model.id);
-                                            model_list.set(models());
-                                            active.set(active_model().map(|model| model.id));
-                                            status.set(Some(format!("模型无效: {error}")));
-                                            on_changed.call(());
+                                            let _ = lazygo::analysis::remove_model(&model.id);
+                                            status.set(Some(error));
                                         } else {
-                                            status.set(Some(format!("已导入 {}", model.name)));
                                             model_list.set(models());
                                             active.set(active_model().map(|model| model.id));
                                             on_changed.call(());
@@ -262,94 +222,40 @@ pub fn SettingsPage(
                                 busy.set(false);
                             });
                         },
-                        if busy() { "读取中…" } else { "导入模型" }
+                        if busy() { "验证中…" } else { "导入" }
                     }
-                }
-                p { class: "settings-note",
-                    "模型不内置在 APK 中。请从电脑或浏览器下载 KataGo 的 .bin.gz 模型，再在这里导入；App 不会联网下载。"
-                }
-                if model_items.is_empty() {
-                    div { class: "empty-models",
-                        span { "尚未导入模型" }
-                        span { class: "empty-models-hint", "导入 b6c96 约 3.7MB，b10c128 约 11MB" }
-                    }
-                } else {
-                    div { class: "model-list",
-                        for model in model_items {
-                            div { class: "model-row", key: "{model.id}",
-                                div { class: "model-info",
-                                    span { class: "model-name", "{model.name}" }
-                                    span { class: "model-meta", "{format_size(model.size)}" }
-                                }
-                                if active_id.as_deref() == Some(model.id.as_str()) {
-                                    span { class: "model-badge", "使用中" }
-                                } else {
-                                    button {
-                                        class: "secondary-button",
-                                        r#type: "button",
-                                        disabled: busy(),
-                                        onclick: {
-                                            let id = model.id.clone();
-                                            move |_| {
-                                                match select_model(&id) {
-                                                    Ok(()) => {
-                                                        active.set(Some(id.clone()));
-                                                        status.set(Some(format!("已切换到 {id}")));
-                                                        on_changed.call(());
-                                                    }
-                                                    Err(error) => status.set(Some(error)),
-                                                }
-                                            }
-                                        },
-                                        "使用"
-                                    }
-                                }
-                                button {
-                                    class: if delete_armed() == Some(model.id.clone()) {
-                                        "danger-button armed"
-                                    } else {
-                                        "danger-button"
-                                    },
-                                    r#type: "button",
-                                    disabled: busy(),
-                                    onclick: {
-                                        let id = model.id.clone();
-                                        move |_| {
-                                            if delete_armed() != Some(id.clone()) {
-                                                delete_armed.set(Some(id.clone()));
-                                                return;
-                                            }
-                                            match remove_model(&id) {
-                                                Ok(()) => {
-                                                    delete_armed.set(None);
-                                                    model_list.set(models());
-                                                    active.set(active_model().map(|model| model.id));
-                                                    status.set(Some("模型已删除".into()));
-                                                    on_changed.call(());
-                                                }
-                                                Err(error) => status.set(Some(error)),
-                                            }
-                                        }
-                                    },
-                                    if delete_armed() == Some(model.id.clone()) {
-                                        "确认删除"
-                                    } else {
-                                        "删除"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if let Some(message) = status() {
-                    p { class: "settings-status", "{message}" }
                 }
             }
 
-            div { class: "settings-card settings-about",
-                h2 { "关于" }
-                p { class: "settings-note", "LazyGo 离线分析由 KataGo CPU 引擎提供。" }
-                p { class: "settings-note", "KataGo v1.18.2 · Eigen backend" }
+            div { class: "settings-row",
+                span { class: "settings-label", "分析深度" }
+                span { class: "settings-leader" }
+                div { class: "settings-control",
+                    input {
+                        class: "depth-input",
+                        r#type: "number",
+                        min: "1",
+                        max: "5000",
+                        step: "10",
+                        value: "{current_depth}",
+                        onchange: move |event| {
+                            if let Ok(value) = event.value().parse::<u32>() {
+                                let value = value.clamp(1, 5000);
+                                depth.set(value);
+                                on_depth.call(value);
+                            }
+                        },
+                    }
+                }
+            }
+
+            if let Some(message) = status() {
+                p { class: "settings-error", "{message}" }
+            }
+
+            div { class: "settings-divider settings-divider-footer" }
+            footer { class: "settings-footer",
+                "KataGo v1.18.2 · Eigen CPU"
             }
         }
     }
