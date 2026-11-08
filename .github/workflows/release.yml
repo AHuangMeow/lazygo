@@ -79,10 +79,14 @@ jobs:
         run: |
           cargo clean -p lazygo
           dx build --android --release --target aarch64-linux-android
+          cd target/dx/lazygo/release/android/app
+          ./gradlew :app:assembleRelease
+          cd -
 
       - name: Verify release APK
         run: |
-          APK=$(find target/dx -path "*/release/*" -name "app-release.apk" | head -n 1)
+          find target/dx -type f -name "*.apk" -print
+          APK=$(find target/dx -type f -name "app-release.apk" | head -n 1)
           test -n "$APK"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libkatago.so"
           "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep -q "minSdkVersion:'29'"
