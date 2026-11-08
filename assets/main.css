@@ -661,8 +661,8 @@ body {
 }
 
 .mode-score-glyph.black {
-    background: var(--ctp-base);
-    box-shadow: 0 0 0 1px var(--ctp-subtext0);
+    background: var(--ctp-surface0);
+    box-shadow: 0 0 0 1px var(--ctp-base);
 }
 
 .mode-score-glyph.white {
