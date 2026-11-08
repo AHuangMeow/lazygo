@@ -79,6 +79,11 @@ jobs:
         run: |
           cargo clean -p lazygo
           dx build --android --release --target aarch64-linux-android
+          JNI_LIBS="target/dx/lazygo/release/android/app/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JNI_LIBS"
+          cp target/katago-dist/arm64-v8a/libkatago.so "$JNI_LIBS/libkatago.so"
+          chmod 755 "$JNI_LIBS/libkatago.so"
+          find "$JNI_LIBS" -maxdepth 1 -type f -ls
           cd target/dx/lazygo/release/android/app
           ./gradlew :app:assembleRelease
           cd -
@@ -88,7 +93,13 @@ jobs:
           find target/dx -type f -name "*.apk" -print
           APK=$(find target/dx -type f -name "app-release.apk" | head -n 1)
           test -n "$APK"
-          unzip -l "$APK" | grep -q "lib/arm64-v8a/libkatago.so"
+          echo "APK=$APK"
+          unzip -l "$APK" | grep -E "lib/" || true
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libkatago.so" || {
+            echo "KataGo engine is missing from the APK" >&2
+            exit 1
+          }
+          "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep "minSdkVersion"
           "${ANDROID_HOME}/build-tools/34.0.0/aapt2" dump badging "$APK" | grep -q "minSdkVersion:'29'"
           "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs "$APK"
           ASSET="lazygo-${GITHUB_REF_NAME//\//-}.apk"
