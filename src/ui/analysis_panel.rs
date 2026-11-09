@@ -59,6 +59,7 @@ const setupRing = () => {
     };
     const isVisible = () => !el.classList.contains("hidden");
     const state = { x: 0, y: 0, visualX: 0, visualY: 0, raf: 0, hasPosition: false };
+    let layoutChanged = false;
     const target = parseTarget();
 
     if (target) {
@@ -69,17 +70,36 @@ const setupRing = () => {
         if (isVisible()) {
             state.hasPosition = true;
             apply(state.x, state.y);
-            el.style.opacity = "1";
-        } else {
-            el.style.opacity = "0";
         }
+    }
+
+    const svg = el.ownerSVGElement;
+    if (svg) {
+        new MutationObserver(() => {
+            layoutChanged = true;
+        }).observe(svg, {
+            attributes: true,
+            attributeFilter: ["viewBox"],
+        });
     }
 
     const animate = () => {
         const next = parseTarget();
         const visible = isVisible();
         if (!next || !visible) {
-            el.style.opacity = "0";
+            return;
+        }
+
+        if (layoutChanged) {
+            layoutChanged = false;
+            state.x = next.x;
+            state.y = next.y;
+            state.visualX = next.x;
+            state.visualY = next.y;
+            state.hasPosition = true;
+            if (state.raf) cancelAnimationFrame(state.raf);
+            state.raf = 0;
+            apply(state.x, state.y);
             return;
         }
 
@@ -90,11 +110,9 @@ const setupRing = () => {
             state.visualY = next.y;
             state.hasPosition = true;
             apply(state.x, state.y);
-            el.style.opacity = "1";
             return;
         }
 
-        el.style.opacity = "1";
         if (Math.abs(state.x - next.x) < 0.01 && Math.abs(state.y - next.y) < 0.01) {
             return;
         }
