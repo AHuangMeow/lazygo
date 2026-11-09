@@ -574,7 +574,11 @@ body {
 }
 
 .menu-option {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     padding: 6px 8px;
+    overflow: hidden;
     border: 0;
     border-radius: 6px;
     background: transparent;
@@ -582,8 +586,9 @@ body {
     font: inherit;
     font-size: 0.85rem;
     text-align: left;
-    cursor: pointer;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
 }
 
 .menu-option:hover {
@@ -702,9 +707,6 @@ body {
     border-radius: 50%;
 }
 
-.candidate-toggle.active .candidate-glyph {
-    background: currentColor;
-}
 
 .board-column {
     flex: 1;
@@ -945,8 +947,10 @@ body {
     display: flex;
     flex: 1;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     padding: 22px 20px 20px;
+    overflow-x: hidden;
     overflow-y: auto;
     background: var(--ctp-surface1);
 }
@@ -967,14 +971,16 @@ body {
 }
 
 .settings-row {
-    display: grid;
-    grid-template-columns: max-content 1fr max-content;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
+    min-width: 0;
     min-height: 56px;
 }
 
 .settings-label {
+    flex: 0 0 auto;
     color: var(--ctp-text);
     font-size: 1.425rem;
     line-height: 1.2;
@@ -982,7 +988,9 @@ body {
 }
 
 .settings-leader {
+    flex: 1 1 24px;
     align-self: center;
+    min-width: 16px;
     height: 0;
     margin-top: 2px;
     border-top: 2px dotted var(--ctp-overlay0);
@@ -990,10 +998,13 @@ body {
 
 .settings-control {
     display: flex;
+    flex: 0 1 auto;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
     min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
 }
 
 .model-select-trigger {
@@ -1001,7 +1012,8 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    width: 142px;
+    width: clamp(104px, 34vw, 142px);
+    max-width: 100%;
     height: 38px;
     padding: 6px 8px;
     border: 2.5px solid var(--ctp-overlay0);

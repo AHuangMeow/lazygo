@@ -269,7 +269,7 @@ pub fn SettingsPage(
             }
 
             div { class: "settings-row",
-                span { class: "settings-label", "推荐选点数" }
+                span { class: "settings-label", "推荐选点" }
                 span { class: "settings-leader" }
                 div { class: "settings-control",
                     input {
