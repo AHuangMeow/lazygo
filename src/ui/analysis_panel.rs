@@ -173,6 +173,22 @@ fn chart_x(index: usize, total_moves: usize, width: f64) -> f64 {
     LEFT + index as f64 * plot_width / (total_moves.max(10) + 1) as f64
 }
 
+fn nearest_chart_turn(x: f64, total_moves: usize, width: f64) -> Option<usize> {
+    if total_moves == 0 {
+        return None;
+    }
+    let mut nearest = 1;
+    let mut nearest_distance = f64::INFINITY;
+    for index in 1..=total_moves {
+        let distance = (chart_x(index, total_moves, width) - x).abs();
+        if distance < nearest_distance {
+            nearest_distance = distance;
+            nearest = index;
+        }
+    }
+    Some(nearest)
+}
+
 #[component]
 fn AnalysisChart(
     snapshots: Vec<Option<AnalysisSnapshot>>,
@@ -183,6 +199,7 @@ fn AnalysisChart(
     on_replay: EventHandler<usize>,
 ) -> Element {
     let chart_size = use_signal(|| (DEFAULT_WIDTH, DEFAULT_HEIGHT));
+    let mut chart_drag = use_signal(|| None::<i32>);
     let (width, height) = chart_size();
     let plot_height = (height - TOP - BOTTOM).max(1.0);
     let (min, max) = axis_bounds(mode);
@@ -265,7 +282,6 @@ fn AnalysisChart(
                                         cx: "{x}",
                                         cy: "{y}",
                                         r: "9",
-                                        onclick: move |_| on_replay.call(index),
                                     }
                                     if pass {
                                         text {
@@ -274,7 +290,6 @@ fn AnalysisChart(
                                             y: "{y}",
                                             text_anchor: "middle",
                                             dominant_baseline: "middle",
-                                            onclick: move |_| on_replay.call(index),
                                             "p"
                                         }
                                     } else {
@@ -283,7 +298,6 @@ fn AnalysisChart(
                                             cx: "{x}",
                                             cy: "{y}",
                                             r: "3.2",
-                                            onclick: move |_| on_replay.call(index),
                                         }
                                     }
                                 }
@@ -333,6 +347,47 @@ fn AnalysisChart(
                     text_anchor: "middle",
                     "暂无分析"
                 }
+            }
+            rect {
+                class: "chart-interaction",
+                x: "0",
+                y: "0",
+                width: "{width}",
+                height: "{height}",
+                onpointerdown: move |event| {
+                    event.prevent_default();
+                    chart_drag.set(Some(event.data().pointer_id()));
+                    if let Some(turn) = nearest_chart_turn(
+                        event.data().element_coordinates().x,
+                        total_moves,
+                        width,
+                    ) {
+                        on_replay.call(turn);
+                    }
+                },
+                onpointermove: move |event| {
+                    if chart_drag() != Some(event.data().pointer_id()) {
+                        return;
+                    }
+                    event.prevent_default();
+                    if let Some(turn) = nearest_chart_turn(
+                        event.data().element_coordinates().x,
+                        total_moves,
+                        width,
+                    ) {
+                        on_replay.call(turn);
+                    }
+                },
+                onpointerup: move |event| {
+                    if chart_drag() == Some(event.data().pointer_id()) {
+                        chart_drag.set(None);
+                    }
+                },
+                onpointercancel: move |event| {
+                    if chart_drag() == Some(event.data().pointer_id()) {
+                        chart_drag.set(None);
+                    }
+                },
             }
         }
     }
@@ -397,7 +452,7 @@ pub fn AnalysisPanel(
 
 #[cfg(test)]
 mod tests {
-    use super::{chart_x, is_pass, LEFT};
+    use super::{chart_x, is_pass, nearest_chart_turn, LEFT};
     use lazygo::game::Move;
 
     #[test]
@@ -408,6 +463,22 @@ mod tests {
         assert_eq!(chart_x(9, 9, width), LEFT + plot_width * 9.0 / 11.0);
         assert_eq!(chart_x(19, 19, width), LEFT + plot_width * 19.0 / 20.0);
         assert_eq!(chart_x(5, 20, width), LEFT + plot_width * 5.0 / 21.0);
+    }
+
+    #[test]
+    fn chart_turn_is_chosen_by_nearest_x() {
+        let width = 320.0;
+        let first = chart_x(1, 3, width);
+        let second = chart_x(2, 3, width);
+        let third = chart_x(3, 3, width);
+
+        assert_eq!(nearest_chart_turn(first, 3, width), Some(1));
+        assert_eq!(nearest_chart_turn(first + 1.0, 3, width), Some(1));
+        assert_eq!(nearest_chart_turn(second, 3, width), Some(2));
+        assert_eq!(nearest_chart_turn(third, 3, width), Some(3));
+        assert_eq!(nearest_chart_turn(0.0, 3, width), Some(1));
+        assert_eq!(nearest_chart_turn(1000.0, 3, width), Some(3));
+        assert_eq!(nearest_chart_turn(100.0, 0, width), None);
     }
 
     #[test]
