@@ -3,7 +3,7 @@ use lazygo::game::{star_points, Game, Stone};
 use lazygo::session::PendingMove;
 
 const STAR_RADIUS: f64 = 50.0 / 304.0;
-const HIT_RADIUS: f64 = 0.36;
+const HIT_HALF_CELL: f64 = 0.5;
 const STONE_OUTER_RADIUS: f64 = 0.46;
 const STONE_INNER_RADIUS: f64 = 0.40;
 const PENDING_FRAME_RADIUS: f64 = 0.54;
@@ -57,7 +57,8 @@ fn board_point(
     if !(0.0..=max as f64).contains(&nearest_x) || !(0.0..=max as f64).contains(&nearest_y) {
         return None;
     }
-    if (x - nearest_x).powi(2) + (y - nearest_y).powi(2) > HIT_RADIUS.powi(2) {
+    // Each intersection owns a square exactly one cell wide and tall.
+    if (x - nearest_x).abs() > HIT_HALF_CELL || (y - nearest_y).abs() > HIT_HALF_CELL {
         return None;
     }
 
@@ -223,32 +224,42 @@ mod tests {
     use super::board_point;
 
     #[test]
-    fn hit_test_accepts_points_inside_the_radius() {
+    fn hit_test_accepts_points_inside_the_cell_square() {
         assert_eq!(
             board_point(430.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8),
             Some((4, 4))
         );
+        assert_eq!(
+            board_point(451.0, 451.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((5, 5))
+        );
+        assert_eq!(
+            board_point(349.0, 449.0, 0.0, 0.0, 800.0, 800.0, 8),
+            Some((3, 4))
+        );
     }
 
     #[test]
-    fn hit_test_ignores_gaps_and_far_outside_taps() {
-        assert_eq!(board_point(450.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
+    fn hit_test_rejects_taps_far_outside_the_board() {
         assert_eq!(board_point(-100.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
+        assert_eq!(board_point(900.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
     }
 
     #[test]
-    fn hit_test_uses_full_circles_at_edges_and_corners() {
+    fn hit_test_extends_half_a_cell_past_edges_and_corners() {
         assert_eq!(
             board_point(-1.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8),
             Some((0, 4))
         );
         assert_eq!(
-            board_point(-1.0, -1.0, 0.0, 0.0, 800.0, 800.0, 8),
+            board_point(-49.0, -49.0, 0.0, 0.0, 800.0, 800.0, 8),
             Some((0, 0))
         );
+        assert_eq!(board_point(-51.0, 400.0, 0.0, 0.0, 800.0, 800.0, 8), None);
         assert_eq!(
-            board_point(801.0, 801.0, 0.0, 0.0, 800.0, 800.0, 8),
+            board_point(849.0, 849.0, 0.0, 0.0, 800.0, 800.0, 8),
             Some((8, 8))
         );
+        assert_eq!(board_point(851.0, 851.0, 0.0, 0.0, 800.0, 800.0, 8), None);
     }
 }
