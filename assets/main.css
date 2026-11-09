@@ -876,12 +876,6 @@ body {
     pointer-events: none;
 }
 
-.chart-empty {
-    fill: var(--ctp-subtext0);
-    font-family: inherit;
-    font-size: 10.5px;
-}
-
 .analysis-status,
 .analysis-error {
     position: absolute;

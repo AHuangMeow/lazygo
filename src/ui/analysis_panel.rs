@@ -6,7 +6,7 @@ use super::{AnalysisMode, ModeToggle, PerspectiveToggle};
 
 const DEFAULT_WIDTH: f64 = 320.0;
 const DEFAULT_HEIGHT: f64 = 168.0;
-const LEFT: f64 = 20.0;
+const LEFT: f64 = 28.0;
 const RIGHT: f64 = 6.0;
 const TOP: f64 = 14.0;
 const BOTTOM: f64 = 14.0;
@@ -192,12 +192,9 @@ fn chart_x(index: usize, total_moves: usize, width: f64) -> f64 {
 }
 
 fn nearest_chart_turn(x: f64, total_moves: usize, width: f64) -> Option<usize> {
-    if total_moves == 0 {
-        return None;
-    }
-    let mut nearest = 1;
+    let mut nearest = 0;
     let mut nearest_distance = f64::INFINITY;
-    for index in 1..=total_moves {
+    for index in 0..=total_moves {
         let distance = (chart_x(index, total_moves, width) - x).abs();
         if distance < nearest_distance {
             nearest_distance = distance;
@@ -230,13 +227,10 @@ fn AnalysisChart(
         AnalysisMode::Winrate => &[100.0, 75.0, 50.0, 25.0, 0.0],
         AnalysisMode::Score => &[10.0, 5.0, 0.0, -5.0, -10.0],
     };
-    let current = (current_index > 0)
-        .then(|| {
-            snapshots
-                .get(current_index)
-                .and_then(|snapshot| snapshot.as_ref())
-        })
-        .flatten();
+    let current = snapshots
+        .get(current_index)
+        .and_then(|snapshot| snapshot.as_ref());
+    let initial_turn = current_index == 0;
 
     use_effect(move || {
         let _ = document::eval(RING_ANIMATION_SCRIPT);
@@ -278,7 +272,7 @@ fn AnalysisChart(
             for value in labels {
                 text {
                     class: "chart-label",
-                    x: "{LEFT - 4.0}",
+                    x: "{LEFT - 8.0}",
                     y: "{y_for(*value)}",
                     text_anchor: "end",
                     dominant_baseline: "middle",
@@ -359,21 +353,12 @@ fn AnalysisChart(
                         }
                         text {
                             class: "chart-value",
-                            x: "0",
-                            y: "-11",
-                            text_anchor: "middle",
+                            x: if initial_turn { "10" } else { "0" },
+                            y: if initial_turn { "-10" } else { "-11" },
+                            text_anchor: if initial_turn { "start" } else { "middle" },
                             "{current_value:.1}"
                         }
                     }
-                }
-            }
-            if total_moves == 0 {
-                text {
-                    class: "chart-empty",
-                    x: "{LEFT + (width - LEFT - RIGHT) / 2.0}",
-                    y: "{TOP + plot_height / 2.0}",
-                    text_anchor: "middle",
-                    "暂无分析"
                 }
             }
             rect {
@@ -504,9 +489,9 @@ mod tests {
         assert_eq!(nearest_chart_turn(first + 1.0, 3, width), Some(1));
         assert_eq!(nearest_chart_turn(second, 3, width), Some(2));
         assert_eq!(nearest_chart_turn(third, 3, width), Some(3));
-        assert_eq!(nearest_chart_turn(0.0, 3, width), Some(1));
+        assert_eq!(nearest_chart_turn(0.0, 3, width), Some(0));
         assert_eq!(nearest_chart_turn(1000.0, 3, width), Some(3));
-        assert_eq!(nearest_chart_turn(100.0, 0, width), None);
+        assert_eq!(nearest_chart_turn(100.0, 0, width), Some(0));
     }
 
     #[test]
