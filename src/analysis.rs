@@ -219,11 +219,20 @@ fn unique_model_name(dir: &Path, name: &str) -> String {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnalysisSettings {
     pub max_visits: u32,
+    #[serde(default = "default_candidate_count")]
+    pub candidate_count: u32,
+}
+
+fn default_candidate_count() -> u32 {
+    5
 }
 
 impl Default for AnalysisSettings {
     fn default() -> Self {
-        Self { max_visits: 200 }
+        Self {
+            max_visits: 200,
+            candidate_count: default_candidate_count(),
+        }
     }
 }
 
@@ -233,6 +242,7 @@ pub fn load_settings() -> AnalysisSettings {
         .and_then(|contents| serde_json::from_str(&contents).ok())
         .map(|settings: AnalysisSettings| AnalysisSettings {
             max_visits: settings.max_visits.clamp(1, 5000),
+            candidate_count: settings.candidate_count.clamp(1, 10),
         })
         .unwrap_or_default()
 }
@@ -334,8 +344,17 @@ mod tests {
     }
 
     #[test]
+    fn old_settings_receive_the_default_candidate_count() {
+        let settings: AnalysisSettings = serde_json::from_str(r#"{"max_visits":300}"#).unwrap();
+        assert_eq!(settings.max_visits, 300);
+        assert_eq!(settings.candidate_count, 5);
+    }
+
+    #[test]
     fn default_analysis_depth_is_200() {
-        assert_eq!(AnalysisSettings::default().max_visits, 200);
+        let settings = AnalysisSettings::default();
+        assert_eq!(settings.max_visits, 200);
+        assert_eq!(settings.candidate_count, 5);
     }
 
     #[test]

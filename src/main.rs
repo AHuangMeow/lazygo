@@ -59,6 +59,8 @@ fn App() -> Element {
         mode,
         current_snapshot,
         current_matches,
+        show_candidates,
+        candidate_count,
         analysis_error,
     ) = {
         let analysis = analysis.read();
@@ -69,6 +71,8 @@ fn App() -> Element {
             analysis.mode(),
             analysis.current().cloned(),
             analysis.current_matches(&state),
+            analysis.show_candidates(),
+            analysis.candidate_count(),
             analysis.error().map(str::to_string),
         )
     };
@@ -90,13 +94,25 @@ fn App() -> Element {
             chart[current_index] = Some(previous);
         }
     }
-    let ownership = analysis_open
+    let ownership = (analysis_open && !show_candidates)
         .then(|| {
             current_matches.then(|| {
                 current_snapshot
                     .as_ref()
                     .map(|snapshot| snapshot.ownership.clone())
             })?
+        })
+        .flatten();
+    let candidates = (analysis_open && show_candidates && current_matches)
+        .then(|| {
+            current_snapshot.as_ref().map(|snapshot| {
+                snapshot
+                    .candidates
+                    .iter()
+                    .take(candidate_count as usize)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
         })
         .flatten();
     let max_visits = analysis.read().max_visits();
@@ -142,8 +158,10 @@ fn App() -> Element {
             if settings_open {
                 SettingsPage {
                     max_visits,
+                    candidate_count,
                     on_changed: move |_| analysis.write().reload(),
                     on_depth: move |value| analysis.write().set_max_visits(value),
+                    on_candidate_count: move |value| analysis.write().set_candidate_count(value),
                 }
             } else {
             section { class: "content", style: "{board_margin}",
@@ -153,6 +171,7 @@ fn App() -> Element {
                         pending,
                         pending_clickable,
                         ownership,
+                        candidates,
                         on_select: move |(x, y)| session.write().select(x, y),
                         on_cancel: move |_| session.write().cancel_pending(),
                     }
@@ -217,9 +236,11 @@ fn App() -> Element {
                             chart,
                             current_index,
                             moves: move_history,
+                            show_candidates,
                             on_toggle: move |_| analysis.write().toggle_panel(),
                             on_perspective: move |_| analysis.write().toggle_perspective(),
                             on_mode: move |_| analysis.write().toggle_mode(),
+                            on_candidates: move |_| analysis.write().toggle_candidates(),
                             on_replay: move |turn| session.write().replay_to(turn),
                         }
                     }

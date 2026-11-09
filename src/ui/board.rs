@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use lazygo::analysis::engine::CandidateMove;
 use lazygo::game::{star_points, Game, Stone};
 use lazygo::session::PendingMove;
 
@@ -9,6 +10,39 @@ const STONE_INNER_RADIUS: f64 = 0.40;
 const PENDING_FRAME_RADIUS: f64 = 0.54;
 const LAST_MOVE_RING_RADIUS: f64 = 0.34;
 const LAST_MOVE_RING_WIDTH: f64 = 0.06;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum CandidateTone {
+    Blue,
+    Green,
+    Yellow,
+    Red,
+}
+
+impl CandidateTone {
+    fn class(self) -> &'static str {
+        match self {
+            Self::Blue => "blue",
+            Self::Green => "green",
+            Self::Yellow => "yellow",
+            Self::Red => "red",
+        }
+    }
+}
+
+fn candidate_tone(index: usize, winrate: f32, best_winrate: f32) -> CandidateTone {
+    if index == 0 {
+        return CandidateTone::Blue;
+    }
+    let loss_bp = ((best_winrate - winrate).max(0.0) * 10_000.0).round() as u32;
+    if loss_bp <= 200 {
+        CandidateTone::Green
+    } else if loss_bp <= 500 {
+        CandidateTone::Yellow
+    } else {
+        CandidateTone::Red
+    }
+}
 
 fn stone_classes(stone: Stone) -> (&'static str, &'static str) {
     match stone {
@@ -102,6 +136,7 @@ pub fn Board(
     pending: Option<PendingMove>,
     pending_clickable: bool,
     ownership: Option<Vec<f32>>,
+    candidates: Option<Vec<CandidateMove>>,
     on_select: EventHandler<(usize, usize)>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -131,6 +166,27 @@ pub fn Board(
                 }
             }
             dots
+        })
+        .unwrap_or_default();
+    let candidate_nodes: Vec<(usize, usize, String, CandidateTone)> = candidates
+        .as_ref()
+        .map(|candidates| {
+            let best_winrate = candidates
+                .iter()
+                .map(|candidate| candidate.winrate)
+                .fold(0.0_f32, f32::max);
+            candidates
+                .iter()
+                .enumerate()
+                .map(|(index, candidate)| {
+                    (
+                        candidate.x,
+                        candidate.y,
+                        format!("{:.0}%", candidate.winrate * 100.0),
+                        candidate_tone(index, candidate.winrate, best_winrate),
+                    )
+                })
+                .collect()
         })
         .unwrap_or_default();
 
@@ -187,6 +243,27 @@ pub fn Board(
                     style: "opacity: {opacity:.3};",
                 }
             }
+            for (x, y, label, tone) in candidate_nodes {
+                g {
+                    class: "candidate-stone {tone.class()}",
+                    circle {
+                        class: "candidate-disc",
+                        cx: "{x}",
+                        cy: "{y}",
+                        r: "0.44",
+                    }
+                    text {
+                        class: "candidate-label",
+                        x: "{x}",
+                        y: "{y}",
+                        text_anchor: "middle",
+                        dominant_baseline: "middle",
+                        font_size: "0.26",
+                        font_weight: "700",
+                        "{label}"
+                    }
+                }
+            }
             if let Some((x, y)) = last_move {
                 if let Some(stone) = game.stone_at(x, y) {
                     circle {
@@ -226,7 +303,17 @@ pub fn Board(
 
 #[cfg(test)]
 mod tests {
-    use super::board_point;
+    use super::{board_point, candidate_tone, CandidateTone};
+
+    #[test]
+    fn candidate_colors_follow_winrate_loss() {
+        assert_eq!(candidate_tone(0, 0.60, 0.60), CandidateTone::Blue);
+        assert_eq!(candidate_tone(1, 0.59, 0.60), CandidateTone::Green);
+        assert_eq!(candidate_tone(1, 0.58, 0.60), CandidateTone::Green);
+        assert_eq!(candidate_tone(1, 0.57, 0.60), CandidateTone::Yellow);
+        assert_eq!(candidate_tone(1, 0.55, 0.60), CandidateTone::Yellow);
+        assert_eq!(candidate_tone(1, 0.54, 0.60), CandidateTone::Red);
+    }
 
     #[test]
     fn hit_test_accepts_points_inside_the_cell_square() {

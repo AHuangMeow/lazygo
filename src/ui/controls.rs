@@ -237,6 +237,24 @@ pub fn ConfirmButton(enabled: bool, on_click: EventHandler<()>) -> Element {
 }
 
 #[component]
+pub fn CandidateToggle(active: bool, enabled: bool, on_click: EventHandler<()>) -> Element {
+    rsx! {
+        button {
+            class: if active {
+                "mode-toggle candidate-toggle active"
+            } else {
+                "mode-toggle candidate-toggle"
+            },
+            r#type: "button",
+            aria_label: "AI选点",
+            disabled: !enabled,
+            onclick: move |_| on_click.call(()),
+            span { class: "candidate-glyph" }
+        }
+    }
+}
+
+#[component]
 pub fn PerspectiveToggle(perspective: Stone, on_click: EventHandler<()>) -> Element {
     let (outer, inner) = match perspective {
         Stone::Black => ("indicator-black-outer", "indicator-black-inner"),

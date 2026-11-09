@@ -64,8 +64,10 @@ struct PickedModel {
 #[component]
 pub fn SettingsPage(
     max_visits: u32,
+    candidate_count: u32,
     on_changed: EventHandler<()>,
     on_depth: EventHandler<u32>,
+    on_candidate_count: EventHandler<u32>,
 ) -> Element {
     let mut model_list = use_signal(models);
     let mut active = use_signal(|| active_model().map(|model| model.id));
@@ -260,6 +262,27 @@ pub fn SettingsPage(
                                 let value = value.clamp(1, 5000);
                                 depth.set(value);
                                 on_depth.call(value);
+                            }
+                        },
+                    }
+                }
+            }
+
+            div { class: "settings-row",
+                span { class: "settings-label", "推荐选点数" }
+                span { class: "settings-leader" }
+                div { class: "settings-control",
+                    input {
+                        class: "depth-input",
+                        r#type: "number",
+                        min: "1",
+                        max: "10",
+                        step: "1",
+                        value: "{candidate_count}",
+                        disabled: active_id.is_none(),
+                        onchange: move |event| {
+                            if let Ok(value) = event.value().parse::<u32>() {
+                                on_candidate_count.call(value.clamp(1, 10));
                             }
                         },
                     }

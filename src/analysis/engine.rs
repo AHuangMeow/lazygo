@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -19,6 +20,18 @@ pub struct AnalysisQuery {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct CandidateMove {
+    pub x: usize,
+    pub y: usize,
+    /// Winrate for the side to move after playing this candidate.
+    pub winrate: f32,
+    /// Score lead for the side to move after playing this candidate.
+    pub score_lead: f32,
+    pub order: usize,
+    pub visits: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct AnalysisSnapshot {
     pub black_winrate: f32,
     pub black_score_lead: f32,
@@ -26,6 +39,7 @@ pub struct AnalysisSnapshot {
     pub visits: u32,
     pub current_player: Stone,
     pub best_move: Option<(usize, usize)>,
+    pub candidates: Vec<CandidateMove>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -216,10 +230,32 @@ fn snapshot(result: &AnalysisResult) -> AnalysisSnapshot {
         .unwrap_or_default();
     let ownership = black_perspective_ownership(current_player, ownership);
 
-    let best_move = result.move_infos.first().and_then(|info| match info.mv {
-        KataMove::Move(Coord(x, y)) => Some((x as usize, y as usize)),
-        KataMove::Pass => None,
-    });
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+    for info in &result.move_infos {
+        if info.is_symmetry_of.is_some() {
+            continue;
+        }
+        let KataMove::Move(Coord(x, y)) = info.mv else {
+            continue;
+        };
+        if !seen.insert((x, y)) {
+            continue;
+        }
+        candidates.push(CandidateMove {
+            x: x as usize,
+            y: y as usize,
+            winrate: info.winrate as f32,
+            score_lead: info.score_lead as f32,
+            order: info.order,
+            visits: info.visits,
+        });
+    }
+    candidates.sort_by_key(|candidate| candidate.order);
+    candidates.truncate(10);
+    let best_move = candidates
+        .first()
+        .map(|candidate| (candidate.x, candidate.y));
 
     AnalysisSnapshot {
         black_winrate,
@@ -228,6 +264,7 @@ fn snapshot(result: &AnalysisResult) -> AnalysisSnapshot {
         visits: result.root_info.visits,
         current_player,
         best_move,
+        candidates,
     }
 }
 

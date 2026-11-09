@@ -8,6 +8,9 @@
     --ctp-overlay0: #6c7086;
     --ctp-overlay2: #9399b2;
     --ctp-base: #1e1e2e;
+    --ctp-blue: #89b4fa;
+    --ctp-green: #a6e3a1;
+    --ctp-yellow: #f9e2af;
     --ctp-red: #f38ba8;
     --footer-margin: 24px;
 }
@@ -669,6 +672,40 @@ body {
     background: var(--ctp-text);
 }
 
+.candidate-toggle {
+    color: var(--ctp-overlay0);
+}
+
+.candidate-toggle:hover:not(:disabled) {
+    color: var(--ctp-subtext0);
+}
+
+.candidate-toggle.active {
+    color: var(--ctp-blue);
+}
+
+.candidate-toggle.active:hover:not(:disabled) {
+    color: var(--ctp-blue);
+}
+
+.candidate-toggle:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.candidate-glyph {
+    display: block;
+    width: 16px;
+    height: 16px;
+    box-sizing: border-box;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+}
+
+.candidate-toggle.active .candidate-glyph {
+    background: currentColor;
+}
+
 .board-column {
     flex: 1;
     min-height: 0;
@@ -1086,6 +1123,40 @@ body {
 
 .last-move-ring.white {
     stroke: var(--ctp-base);
+}
+
+.candidate-stone {
+    pointer-events: none;
+}
+
+.candidate-stone.blue {
+    color: var(--ctp-blue);
+}
+
+.candidate-stone.green {
+    color: var(--ctp-green);
+}
+
+.candidate-stone.yellow {
+    color: var(--ctp-yellow);
+}
+
+.candidate-stone.red {
+    color: var(--ctp-red);
+}
+
+.candidate-disc {
+    fill: currentColor;
+    fill-opacity: 0.28;
+    stroke: currentColor;
+    stroke-width: 0.06;
+    stroke-opacity: 0.9;
+}
+
+.candidate-label {
+    fill: var(--ctp-text);
+    font-family: inherit;
+    pointer-events: none;
 }
 
 .ownership-dot.on-stone {

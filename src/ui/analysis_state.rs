@@ -20,6 +20,8 @@ pub struct AnalysisUiState {
     perspective: Stone,
     mode: AnalysisMode,
     max_visits: u32,
+    candidate_count: u32,
+    show_candidates: bool,
 }
 
 impl Default for AnalysisUiState {
@@ -41,6 +43,8 @@ impl AnalysisUiState {
             perspective: Stone::Black,
             mode: AnalysisMode::Winrate,
             max_visits: settings.max_visits,
+            candidate_count: settings.candidate_count,
+            show_candidates: false,
         };
         state.reload();
         state
@@ -90,6 +94,34 @@ impl AnalysisUiState {
         self.max_visits
     }
 
+    pub fn candidate_count(&self) -> u32 {
+        self.candidate_count
+    }
+
+    pub fn show_candidates(&self) -> bool {
+        self.show_candidates
+    }
+
+    pub fn toggle_candidates(&mut self) {
+        if self.enabled {
+            self.show_candidates = !self.show_candidates;
+        }
+    }
+
+    pub fn set_candidate_count(&mut self, candidate_count: u32) {
+        let candidate_count = candidate_count.clamp(1, 10);
+        if candidate_count == self.candidate_count {
+            return;
+        }
+        self.candidate_count = candidate_count;
+        if let Err(error) = save_settings(&AnalysisSettings {
+            max_visits: self.max_visits,
+            candidate_count,
+        }) {
+            self.error = Some(error);
+        }
+    }
+
     pub fn current(&self) -> Option<&AnalysisSnapshot> {
         self.current.as_ref()
     }
@@ -131,7 +163,10 @@ impl AnalysisUiState {
         self.error = None;
         self.controller.clear_cache();
 
-        if let Err(error) = save_settings(&AnalysisSettings { max_visits }) {
+        if let Err(error) = save_settings(&AnalysisSettings {
+            max_visits,
+            candidate_count: self.candidate_count,
+        }) {
             self.error = Some(error);
         }
     }

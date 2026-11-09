@@ -218,6 +218,7 @@ mod tests {
             visits: 100,
             current_player: crate::game::Stone::White,
             best_move: Some((4, 5)),
+            candidates: Vec::new(),
         };
         let mut cache = AnalysisCache::default();
         cache.insert(key.clone(), snapshot.clone());

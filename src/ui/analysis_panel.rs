@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use lazygo::analysis::engine::AnalysisSnapshot;
 use lazygo::game::{Move, Stone};
 
-use super::{AnalysisMode, ModeToggle, PerspectiveToggle};
+use super::{AnalysisMode, CandidateToggle, ModeToggle, PerspectiveToggle};
 
 const DEFAULT_WIDTH: f64 = 320.0;
 const DEFAULT_HEIGHT: f64 = 168.0;
@@ -416,9 +416,11 @@ pub fn AnalysisPanel(
     chart: Vec<Option<AnalysisSnapshot>>,
     current_index: usize,
     moves: Vec<Move>,
+    show_candidates: bool,
     on_toggle: EventHandler<()>,
     on_perspective: EventHandler<()>,
     on_mode: EventHandler<()>,
+    on_candidates: EventHandler<()>,
     on_replay: EventHandler<usize>,
 ) -> Element {
     rsx! {
@@ -443,6 +445,11 @@ pub fn AnalysisPanel(
                         mode,
                         perspective,
                         on_click: move |_| on_mode.call(()),
+                    }
+                    CandidateToggle {
+                        active: show_candidates,
+                        enabled,
+                        on_click: move |_| on_candidates.call(()),
                     }
                 }
             }
