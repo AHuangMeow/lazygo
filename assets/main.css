@@ -418,7 +418,7 @@ body {
 
 .confirm-button {
     position: relative;
-    z-index: 4;
+    z-index: 5;
     min-width: 72px;
     min-height: 38px;
     padding: 6px 12px;
@@ -1089,4 +1089,8 @@ body {
     inset: calc(-1 * var(--board-margin, 24px));
     z-index: 2;
     touch-action: manipulation;
+}
+
+.board-hit-layer.pending {
+    z-index: 4;
 }

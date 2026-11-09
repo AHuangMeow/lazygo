@@ -100,6 +100,7 @@ fn handle_board_click(
 pub fn Board(
     game: Game,
     pending: Option<PendingMove>,
+    pending_clickable: bool,
     ownership: Option<Vec<f32>>,
     on_select: EventHandler<(usize, usize)>,
     on_cancel: EventHandler<()>,
@@ -212,7 +213,11 @@ pub fn Board(
             }
             }
             div {
-                class: "board-hit-layer",
+                class: if pending_clickable {
+                    "board-hit-layer pending"
+                } else {
+                    "board-hit-layer"
+                },
                 onclick: move |event| handle_board_click(event, max, on_select, on_cancel),
             }
         }

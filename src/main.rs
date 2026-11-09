@@ -44,6 +44,7 @@ fn App() -> Element {
     let rules = current.rules();
     let locked = state.settings_locked();
     let pending = state.pending();
+    let pending_clickable = pending.is_some() && !state.pass_armed() && !state.reset_armed();
     let komi = state.komi().to_string();
     let turn = current.turn();
     let can_undo = current.can_undo();
@@ -150,6 +151,7 @@ fn App() -> Element {
                     Board {
                         game,
                         pending,
+                        pending_clickable,
                         ownership,
                         on_select: move |(x, y)| session.write().select(x, y),
                         on_cancel: move |_| session.write().cancel_pending(),

@@ -112,12 +112,18 @@ impl Session {
             return;
         }
 
-        if self.pending.is_some() {
-            self.pending = None;
-        } else if self.game.stone_at(x, y).is_none() {
-            let legal = self.game.play(x, y).is_some();
-            self.pending = Some(PendingMove { x, y, legal });
+        if let Some(pending) = self.pending {
+            if pending.x == x && pending.y == y {
+                self.pending = None;
+                return;
+            }
         }
+        if self.game.stone_at(x, y).is_some() {
+            return;
+        }
+
+        let legal = self.game.play(x, y).is_some();
+        self.pending = Some(PendingMove { x, y, legal });
     }
 
     pub fn confirm(&mut self) {
@@ -345,14 +351,40 @@ mod tests {
     }
 
     #[test]
-    fn tapping_another_point_cancels_pending() {
+    fn tapping_another_point_moves_pending() {
         let mut session = Session::new();
 
         session.select(4, 4);
         session.select(3, 3);
 
-        assert!(session.pending().is_none());
-        assert!(!session.can_confirm());
+        assert_eq!(
+            session.pending(),
+            Some(PendingMove {
+                x: 3,
+                y: 3,
+                legal: true
+            })
+        );
+        assert!(session.can_confirm());
+    }
+
+    #[test]
+    fn tapping_an_occupied_point_keeps_pending() {
+        let mut session = Session::new();
+
+        session.select(4, 4);
+        session.confirm();
+        session.select(3, 3);
+        session.select(4, 4);
+
+        assert_eq!(
+            session.pending(),
+            Some(PendingMove {
+                x: 3,
+                y: 3,
+                legal: true
+            })
+        );
     }
 
     #[test]
