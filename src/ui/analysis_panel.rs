@@ -4,14 +4,39 @@ use lazygo::game::{Move, Stone};
 
 use super::{AnalysisMode, ModeToggle, PerspectiveToggle};
 
-const WIDTH: f64 = 320.0;
-const HEIGHT: f64 = 168.0;
+const DEFAULT_WIDTH: f64 = 320.0;
+const DEFAULT_HEIGHT: f64 = 168.0;
 const LEFT: f64 = 20.0;
 const RIGHT: f64 = 6.0;
 const TOP: f64 = 14.0;
 const BOTTOM: f64 = 14.0;
-const PLOT_WIDTH: f64 = WIDTH - LEFT - RIGHT;
-const PLOT_HEIGHT: f64 = HEIGHT - TOP - BOTTOM;
+
+const CHART_SIZE_SCRIPT: &str = r#"
+const setupChartSize = () => {
+    const svg = document.querySelector(".analysis-chart-svg");
+    if (!svg) {
+        requestAnimationFrame(setupChartSize);
+        return;
+    }
+    if (svg.__lazygoSizeReady) return;
+    svg.__lazygoSizeReady = true;
+
+    let last = "";
+    const send = () => {
+        const rect = svg.getBoundingClientRect();
+        const width = Math.round(rect.width * 10) / 10;
+        const height = Math.round(rect.height * 10) / 10;
+        if (width < 80 || height < 60) return;
+        const key = `${width}x${height}`;
+        if (key === last) return;
+        last = key;
+        dioxus.send(key);
+    };
+    requestAnimationFrame(send);
+    new ResizeObserver(send).observe(svg);
+};
+setupChartSize();
+"#;
 
 const RING_ANIMATION_SCRIPT: &str = r#"
 const setupRing = () => {
@@ -143,8 +168,9 @@ fn is_pass(moves: &[Move], index: usize) -> bool {
     index > 0 && matches!(moves.get(index - 1), Some(Move::Pass))
 }
 
-fn chart_x(index: usize, total_moves: usize) -> f64 {
-    LEFT + index as f64 * PLOT_WIDTH / (total_moves.max(10) + 1) as f64
+fn chart_x(index: usize, total_moves: usize, width: f64) -> f64 {
+    let plot_width = (width - LEFT - RIGHT).max(1.0);
+    LEFT + index as f64 * plot_width / (total_moves.max(10) + 1) as f64
 }
 
 #[component]
@@ -156,11 +182,14 @@ fn AnalysisChart(
     moves: Vec<Move>,
     on_replay: EventHandler<usize>,
 ) -> Element {
+    let chart_size = use_signal(|| (DEFAULT_WIDTH, DEFAULT_HEIGHT));
+    let (width, height) = chart_size();
+    let plot_height = (height - TOP - BOTTOM).max(1.0);
     let (min, max) = axis_bounds(mode);
-    let y_for = |value: f64| TOP + (max - value) / (max - min) * PLOT_HEIGHT;
+    let y_for = |value: f64| TOP + (max - value) / (max - min) * plot_height;
     let zero_y = y_for(0.0);
     let total_moves = moves.len();
-    let x_for = |index: usize| chart_x(index, total_moves);
+    let x_for = |index: usize| chart_x(index, total_moves, width);
     let labels: &[f64] = match mode {
         AnalysisMode::Winrate => &[100.0, 75.0, 50.0, 25.0, 0.0],
         AnalysisMode::Score => &[10.0, 5.0, 0.0, -5.0, -10.0],
@@ -177,23 +206,37 @@ fn AnalysisChart(
         let _ = document::eval(RING_ANIMATION_SCRIPT);
     });
 
+    use_effect(move || {
+        let mut chart_size = chart_size;
+        spawn(async move {
+            let mut eval = document::eval(CHART_SIZE_SCRIPT);
+            while let Ok(value) = eval.recv::<String>().await {
+                let mut parts = value.split('x').filter_map(|part| part.parse::<f64>().ok());
+                let (Some(width), Some(height)) = (parts.next(), parts.next()) else {
+                    continue;
+                };
+                chart_size.set((width, height));
+            }
+        });
+    });
+
     rsx! {
         svg {
             class: "analysis-chart-svg",
-            view_box: "0 0 {WIDTH} {HEIGHT}",
+            view_box: "0 0 {width} {height}",
             role: "img",
             line {
                 class: "chart-axis",
                 x1: "{LEFT}",
                 y1: "{TOP}",
                 x2: "{LEFT}",
-                y2: "{TOP + PLOT_HEIGHT}",
+                y2: "{TOP + plot_height}",
             }
             line {
                 class: "chart-axis",
                 x1: "{LEFT}",
                 y1: "{zero_y}",
-                x2: "{LEFT + PLOT_WIDTH}",
+                x2: "{width - RIGHT}",
                 y2: "{zero_y}",
             }
             for value in labels {
@@ -285,8 +328,8 @@ fn AnalysisChart(
             if snapshots.iter().all(Option::is_none) {
                 text {
                     class: "chart-empty",
-                    x: "{LEFT + PLOT_WIDTH / 2.0}",
-                    y: "{TOP + PLOT_HEIGHT / 2.0}",
+                    x: "{LEFT + (width - LEFT - RIGHT) / 2.0}",
+                    y: "{TOP + plot_height / 2.0}",
                     text_anchor: "middle",
                     "暂无分析"
                 }
@@ -354,15 +397,17 @@ pub fn AnalysisPanel(
 
 #[cfg(test)]
 mod tests {
-    use super::{chart_x, is_pass, LEFT, PLOT_WIDTH};
+    use super::{chart_x, is_pass, LEFT};
     use lazygo::game::Move;
 
     #[test]
     fn chart_x_uses_one_slot_larger_than_max_ten() {
-        assert_eq!(chart_x(0, 0), LEFT);
-        assert_eq!(chart_x(9, 9), LEFT + PLOT_WIDTH * 9.0 / 11.0);
-        assert_eq!(chart_x(19, 19), LEFT + PLOT_WIDTH * 19.0 / 20.0);
-        assert_eq!(chart_x(5, 20), LEFT + PLOT_WIDTH * 5.0 / 21.0);
+        let width = 320.0;
+        let plot_width = width - LEFT - 6.0;
+        assert_eq!(chart_x(0, 0, width), LEFT);
+        assert_eq!(chart_x(9, 9, width), LEFT + plot_width * 9.0 / 11.0);
+        assert_eq!(chart_x(19, 19, width), LEFT + plot_width * 19.0 / 20.0);
+        assert_eq!(chart_x(5, 20, width), LEFT + plot_width * 5.0 / 21.0);
     }
 
     #[test]
