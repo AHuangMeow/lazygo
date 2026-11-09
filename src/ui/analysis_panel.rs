@@ -225,6 +225,7 @@ fn AnalysisChart(
     let zero_y = y_for(0.0);
     let total_moves = moves.len();
     let x_for = |index: usize| chart_x(index, total_moves, width);
+    let queued_y = y_for((min + max) / 2.0);
     let labels: &[f64] = match mode {
         AnalysisMode::Winrate => &[100.0, 75.0, 50.0, 25.0, 0.0],
         AnalysisMode::Score => &[10.0, 5.0, 0.0, -5.0, -10.0],
@@ -321,6 +322,15 @@ fn AnalysisChart(
                                 }
                             }
                         }
+                    } else {
+                        text {
+                            class: "chart-queued",
+                            x: "{x_for(index)}",
+                            y: "{queued_y}",
+                            text_anchor: "middle",
+                            dominant_baseline: "middle",
+                            "?"
+                        }
                     }
                 }
             }
@@ -357,7 +367,7 @@ fn AnalysisChart(
                     }
                 }
             }
-            if snapshots.iter().all(Option::is_none) {
+            if total_moves == 0 {
                 text {
                     class: "chart-empty",
                     x: "{LEFT + (width - LEFT - RIGHT) / 2.0}",

@@ -837,6 +837,14 @@ body {
     pointer-events: none;
 }
 
+.chart-queued {
+    fill: var(--ctp-subtext0);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    pointer-events: none;
+}
+
 .chart-current-marker {
     opacity: 0;
     pointer-events: none;
