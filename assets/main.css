@@ -719,6 +719,7 @@ body {
 
 .analysis-row {
     position: relative;
+    z-index: 0;
     display: flex;
     flex: 1;
     min-height: 0;
@@ -730,7 +731,7 @@ body {
     position: absolute;
     top: 0;
     right: 0;
-    z-index: 3;
+    z-index: 1;
     min-width: 64px;
     height: 38px;
     padding: 6px 10px;
