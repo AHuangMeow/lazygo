@@ -227,8 +227,18 @@ impl Board {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct NodeId(u64);
+
+impl NodeId {
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 struct State {
+    id: NodeId,
     board: Board,
     turn: Stone,
     last_move: Option<(usize, usize)>,
@@ -269,6 +279,7 @@ pub struct Game {
     states: Vec<State>,
     moves: Vec<Move>,
     cursor: usize,
+    next_node_id: u64,
 }
 
 impl Game {
@@ -280,17 +291,27 @@ impl Game {
         Self {
             rules,
             states: vec![State {
+                id: NodeId(0),
                 board: Board::new(size),
                 turn: Stone::Black,
                 last_move: None,
             }],
             moves: Vec::new(),
             cursor: 0,
+            next_node_id: 1,
         }
     }
 
     fn current(&self) -> &State {
         &self.states[self.cursor]
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.current().id
+    }
+
+    pub fn node_id_at(&self, turn: usize) -> Option<NodeId> {
+        self.states.get(turn).map(|state| state.id)
     }
 
     pub fn view(&self) -> BoardView {
@@ -445,7 +466,10 @@ impl Game {
         next.states.truncate(self.cursor + 1);
         next.moves.truncate(self.cursor);
         next.moves.push(Move::Play(x, y));
+        let id = NodeId(next.next_node_id);
+        next.next_node_id += 1;
         next.states.push(State {
+            id,
             board,
             turn: opponent,
             last_move: if self_capture { None } else { Some((x, y)) },
@@ -460,7 +484,10 @@ impl Game {
         next.states.truncate(self.cursor + 1);
         next.moves.truncate(self.cursor);
         next.moves.push(Move::Pass);
+        let id = NodeId(next.next_node_id);
+        next.next_node_id += 1;
         next.states.push(State {
+            id,
             board: current.board.clone(),
             turn: current.turn.other(),
             last_move: None,
@@ -516,8 +543,10 @@ mod tests {
         black: &[(usize, usize)],
         white: &[(usize, usize)],
         turn: Stone,
+        id: u64,
     ) -> State {
         State {
+            id: NodeId(id),
             board: board(size, black, white),
             turn,
             last_move: None,
@@ -542,9 +571,10 @@ mod tests {
     ) -> Game {
         Game {
             rules,
-            states: vec![state(size, black, white, turn)],
+            states: vec![state(size, black, white, turn, 0)],
             moves: Vec::new(),
             cursor: 0,
+            next_node_id: 1,
         }
     }
 
@@ -557,16 +587,19 @@ mod tests {
                     &[(0, 1), (1, 0), (1, 2)],
                     &[(2, 0), (1, 1), (2, 2), (3, 1)],
                     Stone::Black,
+                    0,
                 ),
                 state(
                     5,
                     &[(0, 1), (1, 0), (1, 2), (2, 1)],
                     &[(2, 0), (2, 2), (3, 1)],
                     Stone::White,
+                    1,
                 ),
             ],
             moves: vec![Move::Play(2, 1)],
             cursor: 1,
+            next_node_id: 2,
         }
     }
 
@@ -574,11 +607,13 @@ mod tests {
         let mut game = ko_game(rules);
         let captured = game.states[1].clone();
         game.states.push(State {
+            id: NodeId(2),
             board: captured.board.clone(),
             turn: Stone::Black,
             last_move: None,
         });
         game.states.push(State {
+            id: NodeId(3),
             board: captured.board,
             turn: Stone::White,
             last_move: None,
@@ -697,11 +732,13 @@ mod tests {
             rules: Rules::Chinese,
             states: vec![
                 State {
+                    id: NodeId(0),
                     board: board(3, &[(1, 1)], &[]),
                     turn: Stone::White,
                     last_move: None,
                 },
                 State {
+                    id: NodeId(1),
                     board: Board::new(3),
                     turn: Stone::Black,
                     last_move: None,
@@ -709,6 +746,7 @@ mod tests {
             ],
             moves: Vec::new(),
             cursor: 1,
+            next_node_id: 2,
         };
 
         assert!(game.play(1, 1).is_none());
@@ -877,5 +915,28 @@ mod tests {
         assert_eq!(Rules::Chinese.default_komi().value(), 7.5);
         assert_eq!(Rules::Japanese.default_komi().value(), 6.5);
         assert_eq!(Rules::Ing.default_komi().value(), 7.5);
+    }
+
+    #[test]
+    fn node_ids_are_stable_across_replay_and_unique_across_branches() {
+        let game = Game::new(9);
+        let root = game.node_id();
+        assert_eq!(root.get(), 0);
+
+        let first = game.play(4, 4).unwrap();
+        let first_id = first.node_id();
+        assert_ne!(first_id, root);
+
+        let undone = first.undo().unwrap();
+        assert_eq!(undone.node_id(), root);
+
+        let redone = undone.redo().unwrap();
+        assert_eq!(redone.node_id(), first_id);
+
+        let branch = undone.play(3, 3).unwrap();
+        assert_ne!(branch.node_id(), first_id);
+        assert_eq!(branch.node_id_at(0), Some(root));
+        assert_eq!(branch.node_id_at(1), Some(branch.node_id()));
+        assert_eq!(branch.node_id_at(2), None);
     }
 }
