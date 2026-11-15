@@ -51,9 +51,9 @@ fn App() -> Element {
     let turn = current.turn();
     let can_undo = current.can_undo();
     let can_redo = current.can_redo();
-    let game = current.clone();
-    let current_index = game.cursor();
-    let move_history = game.all_moves().to_vec();
+    let board = current.view();
+    let current_index = current.cursor();
+    let move_history = current.all_moves().to_vec();
     let (
         analysis_enabled,
         analysis_open,
@@ -169,7 +169,7 @@ fn App() -> Element {
             section { class: "content", style: "{board_margin}",
                 div { class: "board-column",
                     Board {
-                        game,
+                        board,
                         pending,
                         pending_clickable,
                         ownership,

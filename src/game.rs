@@ -235,6 +235,35 @@ struct State {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct BoardView {
+    size: usize,
+    stones: Vec<Option<Stone>>,
+    turn: Stone,
+    last_move: Option<(usize, usize)>,
+}
+
+impl BoardView {
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    pub fn stone_at(&self, x: usize, y: usize) -> Option<Stone> {
+        if x >= self.size || y >= self.size {
+            return None;
+        }
+        self.stones[y * self.size + x]
+    }
+
+    pub fn turn(&self) -> Stone {
+        self.turn
+    }
+
+    pub fn last_move(&self) -> Option<(usize, usize)> {
+        self.last_move
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct Game {
     rules: Rules,
     states: Vec<State>,
@@ -262,6 +291,16 @@ impl Game {
 
     fn current(&self) -> &State {
         &self.states[self.cursor]
+    }
+
+    pub fn view(&self) -> BoardView {
+        let state = self.current();
+        BoardView {
+            size: state.board.size(),
+            stones: state.board.stones.clone(),
+            turn: state.turn,
+            last_move: state.last_move,
+        }
     }
 
     pub fn size(&self) -> usize {
@@ -800,6 +839,19 @@ mod tests {
 
         assert_eq!(redone.turn(), Stone::White);
         assert_eq!(redone.last_move(), None);
+    }
+
+    #[test]
+    fn board_view_snapshots_the_current_position_only() {
+        let game = Game::new(9).play(4, 4).unwrap().play(3, 3).unwrap();
+        let view = game.undo().unwrap().view();
+
+        assert_eq!(view.size(), 9);
+        assert_eq!(view.turn(), Stone::White);
+        assert_eq!(view.last_move(), Some((4, 4)));
+        assert_eq!(view.stone_at(4, 4), Some(Stone::Black));
+        assert_eq!(view.stone_at(3, 3), None);
+        assert_eq!(view.stone_at(9, 0), None);
     }
 
     #[test]

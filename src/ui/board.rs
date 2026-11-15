@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use lazygo::analysis::engine::CandidateMove;
-use lazygo::game::{star_points, Game, Stone};
+use lazygo::game::{star_points, BoardView, Stone};
 use lazygo::session::PendingMove;
 
 const STAR_RADIUS: f64 = 50.0 / 304.0;
@@ -132,7 +132,7 @@ fn handle_board_click(
 
 #[component]
 pub fn Board(
-    game: Game,
+    board: BoardView,
     pending: Option<PendingMove>,
     pending_clickable: bool,
     ownership: Option<Vec<f32>>,
@@ -140,10 +140,10 @@ pub fn Board(
     on_select: EventHandler<(usize, usize)>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let size = game.size();
+    let size = board.size();
     let max = size - 1;
     let stars = star_points(size);
-    let last_move = game.last_move();
+    let last_move = board.last_move();
     let ownership_dots: Vec<(f64, f64, bool, bool, f32)> = ownership
         .as_ref()
         .map(|ownership| {
@@ -155,7 +155,7 @@ pub fn Board(
                         continue;
                     }
                     let opacity = 0.20 + 0.60 * value.abs().min(1.0);
-                    let on_stone = game.stone_at(x, y).is_some();
+                    let on_stone = board.stone_at(x, y).is_some();
                     dots.push((
                         x as f64 - 0.15,
                         y as f64 - 0.15,
@@ -221,7 +221,7 @@ pub fn Board(
             }
             for y in 0..=max {
                 for x in 0..=max {
-                    if let Some(stone) = game.stone_at(x, y) {
+                    if let Some(stone) = board.stone_at(x, y) {
                         {stone_node(x, y, stone)}
                     }
                 }
@@ -265,7 +265,7 @@ pub fn Board(
                 }
             }
             if let Some((x, y)) = last_move {
-                if let Some(stone) = game.stone_at(x, y) {
+                if let Some(stone) = board.stone_at(x, y) {
                     circle {
                         class: if stone == Stone::Black {
                             "last-move-ring black"
@@ -280,7 +280,7 @@ pub fn Board(
                 }
             }
             if let Some(pending) = pending {
-                {stone_node(pending.x, pending.y, game.turn())}
+                {stone_node(pending.x, pending.y, board.turn())}
                 circle {
                     class: if pending.legal { "pending-frame" } else { "pending-frame illegal" },
                     cx: "{pending.x}",
