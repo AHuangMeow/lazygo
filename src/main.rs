@@ -36,8 +36,9 @@ fn App() -> Element {
     use_future(move || async move {
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(120)).await;
-            let state = session.read().clone();
-            if analysis.read().needs_tick(&state) {
+            let state = session.read();
+            let needs_tick = analysis.read().needs_tick(&state);
+            if needs_tick {
                 analysis.with_mut(|analysis| analysis.tick(&state));
             }
         }

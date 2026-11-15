@@ -49,6 +49,8 @@ pub struct AnalysisUiState {
     error: Option<String>,
     current: Option<AnalysisSnapshot>,
     current_key: Option<AnalysisKey>,
+    current_failed_key: Option<AnalysisKey>,
+    current_retry_ticks: u8,
     panel_open: bool,
     perspective: Stone,
     mode: AnalysisMode,
@@ -74,6 +76,8 @@ impl AnalysisUiState {
             error: None,
             current: None,
             current_key: None,
+            current_failed_key: None,
+            current_retry_ticks: 0,
             panel_open: false,
             perspective: Stone::Black,
             mode: AnalysisMode::Winrate,
@@ -90,6 +94,8 @@ impl AnalysisUiState {
     pub fn reload(&mut self) {
         self.current = None;
         self.current_key = None;
+        self.current_failed_key = None;
+        self.current_retry_ticks = 0;
         self.error = None;
         self.enabled = false;
         self.backfill.reset();
@@ -111,6 +117,8 @@ impl AnalysisUiState {
     pub fn start_new_game(&mut self, total_moves: usize) {
         self.current = None;
         self.current_key = None;
+        self.current_failed_key = None;
+        self.current_retry_ticks = 0;
         self.error = None;
         self.controller.clear_cache();
         self.backfill_target = Some(total_moves);
@@ -225,6 +233,8 @@ impl AnalysisUiState {
         self.max_visits = max_visits;
         self.current = None;
         self.current_key = None;
+        self.current_failed_key = None;
+        self.current_retry_ticks = 0;
         self.error = None;
         self.controller.clear_cache();
         self.backfill.reset();
@@ -281,15 +291,29 @@ impl AnalysisUiState {
             return;
         };
         let key = self.current_key(session, &model_id);
+        let retrying =
+            self.current_failed_key.as_ref() == Some(&key) && self.current_retry_ticks > 0;
 
-        if self.current_key.as_ref() != Some(&key) {
+        if retrying {
+            self.current_retry_ticks -= 1;
+        } else if self.current_key.as_ref() != Some(&key)
+            || self.current_failed_key.as_ref() == Some(&key)
+        {
             let query = session.analysis_query(self.max_visits);
             self.current_key = Some(key.clone());
+            self.current_failed_key = None;
+            self.current_retry_ticks = 0;
             self.current = None;
+            self.error = None;
             match self.controller.ensure(query) {
                 Ok(Some(snapshot)) => self.current = Some(snapshot),
                 Ok(None) => {}
-                Err(error) => self.error = Some(error),
+                Err(error) => {
+                    self.current_key = None;
+                    self.current_failed_key = Some(key.clone());
+                    self.current_retry_ticks = 3;
+                    self.error = Some(error);
+                }
             }
         }
 
@@ -300,9 +324,15 @@ impl AnalysisUiState {
                     if self.current_key.as_ref() == Some(&key) =>
                 {
                     self.current = Some(snapshot);
+                    self.current_failed_key = None;
+                    self.current_retry_ticks = 0;
                     self.error = None;
                 }
                 AnalysisUpdate::Error(key, error) if self.current_key.as_ref() == Some(&key) => {
+                    self.current = None;
+                    self.current_key = None;
+                    self.current_failed_key = Some(key.clone());
+                    self.current_retry_ticks = 3;
                     self.error = Some(error);
                 }
                 _ => {}
