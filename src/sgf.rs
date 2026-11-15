@@ -453,4 +453,11 @@ mod tests {
             .unwrap_err()
             .contains("颜色"));
     }
+
+    #[test]
+    fn rejects_non_finite_komi() {
+        assert!(parse_sgf("(;SZ[9]KM[NaN];B[aa])").is_err());
+        assert!(parse_sgf("(;SZ[9]KM[inf];B[aa])").is_err());
+        assert!(parse_sgf("(;SZ[9]KM[];B[aa])").is_err());
+    }
 }
