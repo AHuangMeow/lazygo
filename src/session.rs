@@ -16,12 +16,17 @@ enum Overlay {
     Reset,
 }
 
+#[derive(Clone, PartialEq, Debug, Default)]
+struct Interaction {
+    pending: Option<PendingMove>,
+    overlay: Overlay,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Session {
     game: Game,
     started: bool,
-    overlay: Overlay,
-    pending: Option<PendingMove>,
+    interaction: Interaction,
     komi: Komi,
 }
 
@@ -36,8 +41,7 @@ impl Session {
         Self {
             game: Game::new(DEFAULT_SIZE),
             started: false,
-            overlay: Overlay::None,
-            pending: None,
+            interaction: Interaction::default(),
             komi: Rules::Chinese.default_komi(),
         }
     }
@@ -58,11 +62,11 @@ impl Session {
     }
 
     pub fn pending(&self) -> Option<PendingMove> {
-        self.pending
+        self.interaction.pending
     }
 
     pub fn reset_armed(&self) -> bool {
-        self.overlay == Overlay::Reset
+        self.interaction.overlay == Overlay::Reset
     }
 
     pub fn komi(&self) -> Komi {
@@ -74,28 +78,32 @@ impl Session {
     }
 
     pub fn pass_armed(&self) -> bool {
-        self.overlay == Overlay::Pass
+        self.interaction.overlay == Overlay::Pass
     }
 
     pub fn can_confirm(&self) -> bool {
-        self.overlay == Overlay::None && self.pending.is_some_and(|pending| pending.legal)
+        self.interaction.overlay == Overlay::None
+            && self
+                .interaction
+                .pending
+                .is_some_and(|pending| pending.legal)
     }
 
     pub fn cancel_pending(&mut self) {
-        self.pending = None;
+        self.interaction.pending = None;
     }
 
     pub fn select(&mut self, x: usize, y: usize) {
-        if self.overlay != Overlay::None {
+        if self.interaction.overlay != Overlay::None {
             return;
         }
         if self.game.is_replaying() || x >= self.game.size().get() || y >= self.game.size().get() {
             return;
         }
 
-        if let Some(pending) = self.pending {
+        if let Some(pending) = self.interaction.pending {
             if pending.x == x && pending.y == y {
-                self.pending = None;
+                self.interaction.pending = None;
                 return;
             }
         }
@@ -104,14 +112,14 @@ impl Session {
         }
 
         let legal = self.game.play(x, y).is_some();
-        self.pending = Some(PendingMove { x, y, legal });
+        self.interaction.pending = Some(PendingMove { x, y, legal });
     }
 
     pub fn confirm(&mut self) {
-        if self.overlay != Overlay::None || self.game.is_replaying() {
+        if self.interaction.overlay != Overlay::None || self.game.is_replaying() {
             return;
         }
-        let Some(pending) = self.pending else {
+        let Some(pending) = self.interaction.pending else {
             return;
         };
 
@@ -119,7 +127,7 @@ impl Session {
             return;
         }
 
-        self.pending = None;
+        self.interaction.pending = None;
 
         if let Some(next) = self.game.play(pending.x, pending.y) {
             self.game = next;
@@ -133,18 +141,18 @@ impl Session {
         if self.game.is_replaying() {
             return;
         }
-        if self.overlay == Overlay::Pass {
-            self.overlay = Overlay::None;
+        if self.interaction.overlay == Overlay::Pass {
+            self.interaction.overlay = Overlay::None;
             self.pass();
         } else {
-            self.pending = None;
-            self.overlay = Overlay::Pass;
+            self.interaction.pending = None;
+            self.interaction.overlay = Overlay::Pass;
         }
     }
 
     pub fn cancel_pass(&mut self) {
-        if self.overlay == Overlay::Pass {
-            self.overlay = Overlay::None;
+        if self.interaction.overlay == Overlay::Pass {
+            self.interaction.overlay = Overlay::None;
         }
     }
 
@@ -154,14 +162,14 @@ impl Session {
         }
         self.game = self.game.pass();
         self.started = true;
-        self.pending = None;
-        self.overlay = Overlay::None;
+        self.interaction.pending = None;
+        self.interaction.overlay = Overlay::None;
     }
 
     pub fn undo(&mut self) {
         if let Some(next) = self.game.undo() {
             self.game = next;
-            self.pending = None;
+            self.interaction.pending = None;
             self.dismiss_overlays();
         }
     }
@@ -169,7 +177,7 @@ impl Session {
     pub fn redo(&mut self) {
         if let Some(next) = self.game.redo() {
             self.game = next;
-            self.pending = None;
+            self.interaction.pending = None;
             self.dismiss_overlays();
         }
     }
@@ -181,7 +189,7 @@ impl Session {
     pub fn replay_to(&mut self, turn: usize) {
         if let Some(next) = self.game.replay_to(turn) {
             self.game = next;
-            self.pending = None;
+            self.interaction.pending = None;
             self.dismiss_overlays();
         }
     }
@@ -206,21 +214,21 @@ impl Session {
     }
 
     pub fn toggle_reset(&mut self) {
-        let was_armed = self.overlay == Overlay::Reset;
-        self.overlay = Overlay::None;
-        self.pending = None;
+        let was_armed = self.interaction.overlay == Overlay::Reset;
+        self.interaction.overlay = Overlay::None;
+        self.interaction.pending = None;
 
         if was_armed {
             self.game = Game::with_rules(self.game.size(), self.game.rules());
             self.started = false;
         } else {
-            self.overlay = Overlay::Reset;
+            self.interaction.overlay = Overlay::Reset;
         }
     }
 
     pub fn cancel_reset(&mut self) {
-        if self.overlay == Overlay::Reset {
-            self.overlay = Overlay::None;
+        if self.interaction.overlay == Overlay::Reset {
+            self.interaction.overlay = Overlay::None;
         }
     }
 
@@ -232,7 +240,7 @@ impl Session {
         if size != self.game.size() {
             self.game = Game::with_rules(size, self.game.rules());
             self.started = false;
-            self.pending = None;
+            self.interaction.pending = None;
         }
 
         self.dismiss_overlays();
@@ -246,7 +254,7 @@ impl Session {
         if rules != self.game.rules() {
             self.game = Game::with_rules(self.game.size(), rules);
             self.started = false;
-            self.pending = None;
+            self.interaction.pending = None;
             self.komi = rules.default_komi();
         }
 
@@ -276,7 +284,7 @@ impl Session {
         self.game = game;
         self.komi = record.komi;
         self.started = true;
-        self.pending = None;
+        self.interaction.pending = None;
         self.dismiss_overlays();
         Ok(())
     }
@@ -291,7 +299,7 @@ impl Session {
     }
 
     fn dismiss_overlays(&mut self) {
-        self.overlay = Overlay::None;
+        self.interaction.overlay = Overlay::None;
     }
 }
 
