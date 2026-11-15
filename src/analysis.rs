@@ -10,6 +10,8 @@ const ACTIVE_MODEL_FILE: &str = "active";
 const SETTINGS_FILE: &str = "settings.json";
 const MODEL_MAGIC: [u8; 2] = [0x1f, 0x8b];
 const DISABLED_MODEL: &str = "__disabled__";
+const MIN_MODEL_BYTES: usize = 1024;
+pub const MAX_MODEL_BYTES: usize = 128 * 1024 * 1024;
 
 pub fn native_engine_path() -> Option<PathBuf> {
     let maps = fs::read_to_string("/proc/self/maps").ok()?;
@@ -107,15 +109,7 @@ pub fn model_path() -> Option<PathBuf> {
 }
 
 pub fn import_model(name: &str, bytes: &[u8]) -> Result<ModelInfo, String> {
-    if bytes.len() < 1024 {
-        return Err("模型文件太小，可能不是有效的 KataGo 模型".into());
-    }
-    if bytes.len() > 512 * 1024 * 1024 {
-        return Err("模型文件过大".into());
-    }
-    if !bytes.starts_with(&MODEL_MAGIC) {
-        return Err("模型必须是 gzip 压缩的 KataGo .bin.gz 文件".into());
-    }
+    validate_model_bytes(bytes)?;
 
     let dir = models_dir().ok_or_else(|| "无法访问应用存储目录".to_string())?;
     let name = unique_model_name(&dir, &sanitize_model_name(name));
@@ -124,9 +118,29 @@ pub fn import_model(name: &str, bytes: &[u8]) -> Result<ModelInfo, String> {
     let partial = dir.join(format!(".{name}.part"));
     fs::write(&partial, bytes).map_err(|error| format!("写入模型失败: {error}"))?;
     fs::rename(&partial, &path).map_err(|error| format!("保存模型失败: {error}"))?;
-    set_active_model(&name)?;
 
     ModelInfo::from_path(path).ok_or_else(|| "模型保存后无法读取".to_string())
+}
+
+pub fn check_model_size(bytes: usize) -> Result<(), String> {
+    if bytes < MIN_MODEL_BYTES {
+        return Err("模型文件太小，可能不是有效的 KataGo 模型".into());
+    }
+    if bytes > MAX_MODEL_BYTES {
+        return Err(format!(
+            "模型文件过大（上限 {} MB）",
+            MAX_MODEL_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_model_bytes(bytes: &[u8]) -> Result<(), String> {
+    check_model_size(bytes.len())?;
+    if !bytes.starts_with(&MODEL_MAGIC) {
+        return Err("模型必须是 gzip 压缩的 KataGo .bin.gz 文件".into());
+    }
+    Ok(())
 }
 
 pub fn disable_model() -> Result<(), String> {
@@ -367,5 +381,22 @@ mod tests {
     fn recognizes_model_names() {
         assert!(is_model_name(Path::new("m.bin.gz")));
         assert!(!is_model_name(Path::new("active")));
+    }
+
+    #[test]
+    fn model_size_is_bounded_before_reading_or_writing() {
+        assert!(check_model_size(0).is_err());
+        assert!(check_model_size(1023).is_err());
+        assert!(check_model_size(1024).is_ok());
+        assert!(check_model_size(MAX_MODEL_BYTES).is_ok());
+        assert!(check_model_size(MAX_MODEL_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn model_bytes_must_be_a_gzip_file() {
+        let mut bytes = vec![0; 1024];
+        assert!(validate_model_bytes(&bytes).is_err());
+        bytes[..2].copy_from_slice(&MODEL_MAGIC);
+        assert!(validate_model_bytes(&bytes).is_ok());
     }
 }

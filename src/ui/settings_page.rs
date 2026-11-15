@@ -7,6 +7,7 @@ use lazygo::analysis::{
 use super::Menu;
 
 const PICK_MODEL_SCRIPT: &str = r#"
+const MAX_MODEL_BYTES = 128 * 1024 * 1024;
 const start = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -28,6 +29,14 @@ const start = () => {
         const file = input.files && input.files[0];
         if (!file) {
             done({ cancelled: true });
+            return;
+        }
+        if (file.size < 1024) {
+            done({ error: "模型文件太小，可能不是有效的 KataGo 模型" });
+            return;
+        }
+        if (file.size > MAX_MODEL_BYTES) {
+            done({ error: "模型文件过大（上限 128 MB）" });
             return;
         }
         const reader = new FileReader();
@@ -230,9 +239,20 @@ pub fn SettingsPage(
                                             let _ = lazygo::analysis::remove_model(&model.id);
                                             status.set(Some(error));
                                         } else {
-                                            model_list.set(models());
-                                            active.set(active_model().map(|model| model.id));
-                                            on_changed.call(());
+                                            match select_model(&model.id) {
+                                                Ok(()) => {
+                                                    model_list.set(models());
+                                                    active.set(
+                                                        active_model().map(|model| model.id),
+                                                    );
+                                                    on_changed.call(());
+                                                }
+                                                Err(error) => {
+                                                    let _ =
+                                                        lazygo::analysis::remove_model(&model.id);
+                                                    status.set(Some(error));
+                                                }
+                                            }
                                         }
                                     }
                                     Err(error) => status.set(Some(error)),
