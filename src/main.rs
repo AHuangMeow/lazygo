@@ -29,6 +29,9 @@ fn App() -> Element {
     let mut analysis = use_signal(AnalysisUiState::new);
     let mut sgf_busy = use_signal(|| false);
     let mut page = use_signal(|| Page::Game);
+    let mut rule_open = use_signal(|| false);
+    let mut size_open = use_signal(|| false);
+    let mut reset_rotation = use_signal(|| 0);
 
     use_future(move || async move {
         loop {
@@ -147,7 +150,10 @@ fn App() -> Element {
                 if state.reset_armed() {
                     div {
                         class: "reset-backdrop",
-                        onclick: move |_| session.write().cancel_reset(),
+                        onclick: move |_| {
+                            session.write().cancel_reset();
+                            reset_rotation.with_mut(|rotation| *rotation -= 360);
+                        },
                     }
                 }
                 if pending.is_some() && !state.pass_armed() && !state.reset_armed() {
@@ -182,12 +188,21 @@ fn App() -> Element {
                             TurnIndicator {
                                 turn,
                                 open: state.pass_armed(),
-                                on_click: move |_| session.write().toggle_pass(),
+                                on_click: move |_| {
+                                    rule_open.set(false);
+                                    size_open.set(false);
+                                    session.write().toggle_pass();
+                                },
                             }
                             ResetButton {
                                 armed: state.reset_armed(),
-                                rotation: state.reset_rotation(),
-                                on_click: move |_| session.write().toggle_reset(),
+                                rotation: reset_rotation(),
+                                on_click: move |_| {
+                                    rule_open.set(false);
+                                    size_open.set(false);
+                                    reset_rotation.with_mut(|rotation| *rotation += 360);
+                                    session.write().toggle_reset();
+                                },
                             }
                             HistoryButton {
                                 direction: HistoryDirection::Undo,
@@ -210,9 +225,17 @@ fn App() -> Element {
                             RuleMenu {
                                 value: rules,
                                 locked,
-                                open: state.rule_open(),
-                                on_toggle: move |_| session.write().toggle_rule_menu(),
-                                on_select: move |rules| session.write().set_rules(rules),
+                                open: rule_open(),
+                                on_toggle: move |_| {
+                                    size_open.set(false);
+                                    session.write().cancel_pass();
+                                    rule_open.toggle();
+                                },
+                                on_select: move |rules| {
+                                    rule_open.set(false);
+                                    size_open.set(false);
+                                    session.write().set_rules(rules);
+                                },
                             }
                             KomiField {
                                 value: komi,
@@ -223,9 +246,17 @@ fn App() -> Element {
                         SizeMenu {
                             size,
                             locked,
-                            open: state.size_open(),
-                            on_toggle: move |_| session.write().toggle_size_menu(),
-                            on_select: move |size| session.write().set_size(size),
+                            open: size_open(),
+                            on_toggle: move |_| {
+                                rule_open.set(false);
+                                session.write().cancel_pass();
+                                size_open.toggle();
+                            },
+                            on_select: move |size| {
+                                rule_open.set(false);
+                                size_open.set(false);
+                                session.write().set_size(size);
+                            },
                         }
                     }
                     div { class: "analysis-row",
@@ -308,6 +339,9 @@ fn App() -> Element {
                                             Ok(()) => {
                                                 let total = session.read().game().all_moves().len();
                                                 analysis.write().start_new_game(total);
+                                                rule_open.set(false);
+                                                size_open.set(false);
+                                                reset_rotation.set(0);
                                             }
                                             Err(error) => eprintln!("SGF 导入失败: {error}"),
                                         }

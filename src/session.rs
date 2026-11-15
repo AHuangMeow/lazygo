@@ -14,10 +14,7 @@ pub struct Session {
     started: bool,
     pass_armed: bool,
     pending: Option<PendingMove>,
-    size_open: bool,
-    rule_open: bool,
     reset_armed: bool,
-    reset_rotation: i32,
     komi: Komi,
 }
 
@@ -34,10 +31,7 @@ impl Session {
             started: false,
             pass_armed: false,
             pending: None,
-            size_open: false,
-            rule_open: false,
             reset_armed: false,
-            reset_rotation: 0,
             komi: Rules::Chinese.default_komi(),
         }
     }
@@ -60,20 +54,8 @@ impl Session {
         self.pending
     }
 
-    pub fn size_open(&self) -> bool {
-        self.size_open
-    }
-
-    pub fn rule_open(&self) -> bool {
-        self.rule_open
-    }
-
     pub fn reset_armed(&self) -> bool {
         self.reset_armed
-    }
-
-    pub fn reset_rotation(&self) -> i32 {
-        self.reset_rotation
     }
 
     pub fn komi(&self) -> Komi {
@@ -145,9 +127,8 @@ impl Session {
             self.pass_armed = false;
             self.pass();
         } else {
+            self.pending = None;
             self.pass_armed = true;
-            self.size_open = false;
-            self.rule_open = false;
             self.reset_armed = false;
         }
     }
@@ -209,15 +190,12 @@ impl Session {
     }
 
     pub fn toggle_reset(&mut self) {
-        self.reset_rotation += 360;
-        self.size_open = false;
-        self.rule_open = false;
         self.pass_armed = false;
+        self.pending = None;
 
         if self.reset_armed {
             self.game = Game::with_rules(self.game.size(), self.game.rules());
             self.started = false;
-            self.pending = None;
             self.reset_armed = false;
         } else {
             self.reset_armed = true;
@@ -226,7 +204,6 @@ impl Session {
 
     pub fn cancel_reset(&mut self) {
         self.reset_armed = false;
-        self.reset_rotation -= 360;
     }
 
     pub fn set_size(&mut self, size: usize) {
@@ -258,26 +235,6 @@ impl Session {
         self.dismiss_overlays();
     }
 
-    pub fn toggle_size_menu(&mut self) {
-        if self.settings_locked() {
-            return;
-        }
-
-        self.rule_open = false;
-        self.pass_armed = false;
-        self.size_open = !self.size_open;
-    }
-
-    pub fn toggle_rule_menu(&mut self) {
-        if self.settings_locked() {
-            return;
-        }
-
-        self.size_open = false;
-        self.pass_armed = false;
-        self.rule_open = !self.rule_open;
-    }
-
     pub fn set_komi(&mut self, komi: Komi) {
         if self.settings_locked() {
             return;
@@ -302,7 +259,6 @@ impl Session {
         self.komi = record.komi;
         self.started = true;
         self.pending = None;
-        self.reset_rotation = 0;
         self.dismiss_overlays();
         Ok(())
     }
@@ -317,8 +273,6 @@ impl Session {
     }
 
     fn dismiss_overlays(&mut self) {
-        self.size_open = false;
-        self.rule_open = false;
         self.reset_armed = false;
         self.pass_armed = false;
     }
@@ -611,6 +565,32 @@ mod tests {
         assert_eq!(session.analysis_query_at(1, 100).moves.len(), 1);
         assert_eq!(session.analysis_query_at(2, 100).moves.len(), 2);
         assert_eq!(session.analysis_query_at(99, 100).moves.len(), 2);
+    }
+
+    #[test]
+    fn arming_an_overlay_clears_the_pending_move() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        assert!(session.pending().is_some());
+
+        session.toggle_pass();
+
+        assert!(session.pass_armed());
+        assert!(session.pending().is_none());
+        assert!(!session.can_confirm());
+    }
+
+    #[test]
+    fn arming_reset_clears_the_pending_move() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        assert!(session.pending().is_some());
+
+        session.toggle_reset();
+
+        assert!(session.reset_armed());
+        assert!(session.pending().is_none());
+        assert!(!session.can_confirm());
     }
 
     #[test]
