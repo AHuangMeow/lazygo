@@ -1,12 +1,5 @@
 use crate::analysis::engine::AnalysisQuery;
-use crate::game::{Game, Move, Rules, DEFAULT_SIZE};
-
-fn default_komi(rules: Rules) -> &'static str {
-    match rules {
-        Rules::Japanese => "6.5",
-        Rules::Chinese | Rules::Ing => "7.5",
-    }
-}
+use crate::game::{Game, Komi, Move, Rules, DEFAULT_SIZE};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PendingMove {
@@ -25,7 +18,7 @@ pub struct Session {
     rule_open: bool,
     reset_armed: bool,
     reset_rotation: i32,
-    komi: String,
+    komi: Komi,
 }
 
 impl Default for Session {
@@ -45,7 +38,7 @@ impl Session {
             rule_open: false,
             reset_armed: false,
             reset_rotation: 0,
-            komi: default_komi(Rules::Chinese).to_string(),
+            komi: Rules::Chinese.default_komi(),
         }
     }
 
@@ -57,11 +50,7 @@ impl Session {
         AnalysisQuery {
             size: self.game.size(),
             rules: self.game.rules(),
-            komi: self
-                .komi
-                .trim()
-                .parse()
-                .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap()),
+            komi: self.komi.value(),
             moves: self.game.moves().to_vec(),
             max_visits,
         }
@@ -87,8 +76,8 @@ impl Session {
         self.reset_rotation
     }
 
-    pub fn komi(&self) -> &str {
-        &self.komi
+    pub fn komi(&self) -> Komi {
+        self.komi
     }
 
     pub fn settings_locked(&self) -> bool {
@@ -213,11 +202,7 @@ impl Session {
         AnalysisQuery {
             size: self.game.size(),
             rules: self.game.rules(),
-            komi: self
-                .komi
-                .trim()
-                .parse()
-                .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap()),
+            komi: self.komi.value(),
             moves,
             max_visits,
         }
@@ -267,7 +252,7 @@ impl Session {
             self.game = Game::with_rules(self.game.size(), rules);
             self.started = false;
             self.pending = None;
-            self.komi = default_komi(rules).to_string();
+            self.komi = rules.default_komi();
         }
 
         self.dismiss_overlays();
@@ -293,7 +278,7 @@ impl Session {
         self.rule_open = !self.rule_open;
     }
 
-    pub fn set_komi(&mut self, komi: String) {
+    pub fn set_komi(&mut self, komi: Komi) {
         if self.settings_locked() {
             return;
         }
@@ -314,7 +299,7 @@ impl Session {
         }
 
         self.game = game;
-        self.komi = record.komi.to_string();
+        self.komi = record.komi;
         self.started = true;
         self.pending = None;
         self.reset_rotation = 0;
@@ -323,15 +308,10 @@ impl Session {
     }
 
     pub fn sgf_text(&self) -> String {
-        let komi = self
-            .komi
-            .trim()
-            .parse()
-            .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap());
         crate::sgf::write_sgf(&crate::sgf::SgfRecord {
             size: self.game.size(),
             rules: self.game.rules(),
-            komi,
+            komi: self.komi,
             moves: self.game.all_moves().to_vec(),
         })
     }
@@ -434,7 +414,7 @@ mod tests {
         assert!(session.pending().is_none());
         assert_eq!(session.game().size(), 13);
         assert_eq!(session.game().rules(), Rules::Japanese);
-        assert_eq!(session.komi(), "6.5");
+        assert_eq!(session.komi().value(), 6.5);
         assert_eq!(session.game().all_moves().len(), 3);
         assert_eq!(session.game().cursor(), 3);
     }
@@ -466,7 +446,7 @@ mod tests {
 
         assert_eq!(record.size, 9);
         assert_eq!(record.moves, session.game().all_moves());
-        assert_eq!(record.komi, 7.5);
+        assert_eq!(record.komi.value(), 7.5);
     }
 
     #[test]
@@ -488,7 +468,7 @@ mod tests {
         assert!(!session.settings_locked());
         assert_eq!(session.game().rules(), Rules::Japanese);
         assert_eq!(session.game().size(), 13);
-        assert_eq!(session.komi(), "6.5");
+        assert_eq!(session.komi().value(), 6.5);
     }
 
     #[test]
@@ -499,11 +479,11 @@ mod tests {
         session.confirm();
         session.set_rules(Rules::Ing);
         session.set_size(19);
-        session.set_komi("7.5".to_string());
+        session.set_komi(Komi::parse("7.5").unwrap());
 
         assert_eq!(session.game().rules(), Rules::Chinese);
         assert_eq!(session.game().size(), 9);
-        assert_eq!(session.komi(), "7.5");
+        assert_eq!(session.komi().value(), 7.5);
     }
 
     #[test]
@@ -516,23 +496,23 @@ mod tests {
         assert!(session.pending().is_none());
         assert!(session.game().is_initial());
         assert_eq!(session.game().rules(), Rules::Ing);
-        assert_eq!(session.komi(), "7.5");
+        assert_eq!(session.komi().value(), 7.5);
     }
 
     #[test]
     fn rules_set_their_default_komi() {
         let mut session = Session::new();
 
-        assert_eq!(session.komi(), "7.5");
+        assert_eq!(session.komi().value(), 7.5);
 
         session.set_rules(Rules::Japanese);
-        assert_eq!(session.komi(), "6.5");
+        assert_eq!(session.komi().value(), 6.5);
 
         session.set_rules(Rules::Ing);
-        assert_eq!(session.komi(), "7.5");
+        assert_eq!(session.komi().value(), 7.5);
 
         session.set_rules(Rules::Chinese);
-        assert_eq!(session.komi(), "7.5");
+        assert_eq!(session.komi().value(), 7.5);
     }
 
     #[test]

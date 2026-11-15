@@ -26,6 +26,13 @@ impl Rules {
         }
     }
 
+    pub fn default_komi(self) -> Komi {
+        match self {
+            Self::Japanese => Komi(6.5),
+            Self::Chinese | Self::Ing => Komi(7.5),
+        }
+    }
+
     fn allows_suicide(self) -> bool {
         self == Self::Ing
     }
@@ -34,6 +41,66 @@ impl Rules {
         match self {
             Self::Japanese => KoRule::Simple,
             Self::Chinese | Self::Ing => KoRule::Positional,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Komi(f64);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum KomiError {
+    Empty,
+    Invalid,
+    NonFinite,
+    OutOfRange,
+}
+
+impl Komi {
+    pub const MIN: f64 = -100.0;
+    pub const MAX: f64 = 100.0;
+
+    pub fn new(value: f64) -> Result<Self, KomiError> {
+        if !value.is_finite() {
+            return Err(KomiError::NonFinite);
+        }
+        if !(Self::MIN..=Self::MAX).contains(&value) {
+            return Err(KomiError::OutOfRange);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn parse(text: &str) -> Result<Self, KomiError> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(KomiError::Empty);
+        }
+        let value = text.parse::<f64>().map_err(|_| KomiError::Invalid)?;
+        Self::new(value)
+    }
+
+    pub fn value(self) -> f64 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for Komi {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.fract() == 0.0 {
+            write!(formatter, "{:.1}", self.0)
+        } else {
+            write!(formatter, "{}", self.0)
+        }
+    }
+}
+
+impl std::fmt::Display for KomiError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => formatter.write_str("贴目不能为空"),
+            Self::Invalid => formatter.write_str("贴目必须是数字"),
+            Self::NonFinite => formatter.write_str("贴目必须是有限数字"),
+            Self::OutOfRange => write!(formatter, "贴目必须在 {} 到 {} 之间", Komi::MIN, Komi::MAX),
         }
     }
 }
@@ -733,5 +800,30 @@ mod tests {
 
         assert_eq!(redone.turn(), Stone::White);
         assert_eq!(redone.last_move(), None);
+    }
+
+    #[test]
+    fn komi_rejects_invalid_and_non_finite_values() {
+        assert_eq!(Komi::parse(""), Err(KomiError::Empty));
+        assert_eq!(Komi::parse("6,5"), Err(KomiError::Invalid));
+        assert_eq!(Komi::parse("NaN"), Err(KomiError::NonFinite));
+        assert_eq!(Komi::parse("inf"), Err(KomiError::NonFinite));
+        assert_eq!(Komi::parse("101"), Err(KomiError::OutOfRange));
+        assert_eq!(Komi::parse("6.5").unwrap().value(), 6.5);
+        assert_eq!(Komi::parse(" -0.5 ").unwrap().value(), -0.5);
+    }
+
+    #[test]
+    fn komi_formats_whole_points_with_one_decimal() {
+        assert_eq!(Komi::parse("7").unwrap().to_string(), "7.0");
+        assert_eq!(Komi::parse("6.5").unwrap().to_string(), "6.5");
+        assert_eq!(Komi::parse("6.25").unwrap().to_string(), "6.25");
+    }
+
+    #[test]
+    fn rules_provide_their_default_komi() {
+        assert_eq!(Rules::Chinese.default_komi().value(), 7.5);
+        assert_eq!(Rules::Japanese.default_komi().value(), 6.5);
+        assert_eq!(Rules::Ing.default_komi().value(), 7.5);
     }
 }

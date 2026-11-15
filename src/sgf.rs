@@ -1,10 +1,10 @@
-use crate::game::{Move, Rules, BOARD_SIZES};
+use crate::game::{Komi, Move, Rules, BOARD_SIZES};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SgfRecord {
     pub size: usize,
     pub rules: Rules,
-    pub komi: f64,
+    pub komi: Komi,
     pub moves: Vec<Move>,
 }
 
@@ -222,15 +222,9 @@ pub fn parse_sgf(text: &str) -> Result<SgfRecord, String> {
     };
 
     let komi = match first_property(&nodes, "KM") {
-        Some(value) => value
-            .trim()
-            .parse::<f64>()
-            .map_err(|_| format!("无效的贴目: {value}"))?,
-        None => default_komi(rules),
+        Some(value) => Komi::parse(value).map_err(|_| format!("无效的贴目: {value}"))?,
+        None => rules.default_komi(),
     };
-    if !komi.is_finite() {
-        return Err("无效的贴目".into());
-    }
 
     let mut moves = Vec::new();
     let mut black_to_play = true;
@@ -270,7 +264,7 @@ pub fn write_sgf(record: &SgfRecord) -> String {
         "(;GM[1]FF[4]CA[UTF-8]AP[LazyGo:{}]SZ[{}]KM[{}]RU[{}]",
         env!("CARGO_PKG_VERSION"),
         record.size,
-        format_komi(record.komi),
+        record.komi,
         rules_name(record.rules),
     );
 
@@ -327,13 +321,6 @@ fn parse_rules(value: &str) -> Result<Rules, String> {
     }
 }
 
-fn default_komi(rules: Rules) -> f64 {
-    match rules {
-        Rules::Japanese => 6.5,
-        Rules::Chinese | Rules::Ing => 7.5,
-    }
-}
-
 fn parse_move(value: &str, size: usize) -> Result<Move, String> {
     let value = value.trim();
     if value.is_empty() {
@@ -374,14 +361,6 @@ fn rules_name(rules: Rules) -> &'static str {
     }
 }
 
-fn format_komi(komi: f64) -> String {
-    if komi.fract() == 0.0 {
-        format!("{komi:.1}")
-    } else {
-        komi.to_string()
-    }
-}
-
 #[cfg(target_os = "android")]
 mod android_save;
 
@@ -393,7 +372,7 @@ mod tests {
         SgfRecord {
             size: 9,
             rules: Rules::Chinese,
-            komi: 7.5,
+            komi: Komi::parse("7.5").unwrap(),
             moves: vec![
                 Move::Play(2, 2),
                 Move::Play(6, 6),
@@ -415,7 +394,7 @@ mod tests {
         let record = SgfRecord {
             size: 19,
             rules: Rules::Ing,
-            komi: 8.0,
+            komi: Komi::parse("8.0").unwrap(),
             moves: vec![Move::Play(18, 18), Move::Play(0, 0)],
         };
         let text = write_sgf(&record);
@@ -430,7 +409,7 @@ mod tests {
         let record = parse_sgf(text).unwrap();
         assert_eq!(record.size, 9);
         assert_eq!(record.rules, Rules::Japanese);
-        assert_eq!(record.komi, 6.5);
+        assert_eq!(record.komi.value(), 6.5);
         assert_eq!(record.moves, vec![Move::Play(4, 4), Move::Pass]);
     }
 

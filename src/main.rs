@@ -47,7 +47,7 @@ fn App() -> Element {
     let locked = state.settings_locked();
     let pending = state.pending();
     let pending_clickable = pending.is_some() && !state.pass_armed() && !state.reset_armed();
-    let komi = state.komi().to_string();
+    let komi = state.komi();
     let turn = current.turn();
     let can_undo = current.can_undo();
     let can_redo = current.can_redo();
