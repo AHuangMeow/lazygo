@@ -124,7 +124,10 @@ fn App() -> Element {
         .flatten();
     let max_visits = analysis.read().max_visits();
     let settings_open = page() == Page::Settings;
-    let board_margin = format!("--board-margin: {:.6}vw;", 100.0 / (size as f64 + 2.0));
+    let board_margin = format!(
+        "--board-margin: {:.6}vw;",
+        100.0 / (size.get() as f64 + 2.0)
+    );
     let font_face = format!(
         r#"@font-face {{ font-family: "Maiyuan II"; src: url("{}") format("truetype"); font-style: normal; font-weight: 400; font-display: swap; }}"#,
         APP_FONT

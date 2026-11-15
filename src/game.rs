@@ -1,7 +1,50 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub const BOARD_SIZES: [usize; 3] = [9, 13, 19];
-pub const DEFAULT_SIZE: usize = 9;
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct BoardSize(usize);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct BoardSizeError(usize);
+
+impl BoardSize {
+    pub const NINE: Self = Self(9);
+    pub const THIRTEEN: Self = Self(13);
+    pub const NINETEEN: Self = Self(19);
+    pub const ALL: [Self; 3] = [Self::NINE, Self::THIRTEEN, Self::NINETEEN];
+
+    pub fn new(value: usize) -> Result<Self, BoardSizeError> {
+        if Self::ALL.contains(&Self(value)) {
+            Ok(Self(value))
+        } else {
+            Err(BoardSizeError(value))
+        }
+    }
+
+    pub fn get(self) -> usize {
+        self.0
+    }
+}
+
+impl Default for BoardSize {
+    fn default() -> Self {
+        Self::NINE
+    }
+}
+
+impl std::fmt::Display for BoardSize {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for BoardSizeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "暂不支持 {} 路棋盘，仅支持 9、13、19 路", self.0)
+    }
+}
+
+pub const BOARD_SIZES: [BoardSize; 3] = BoardSize::ALL;
+pub const DEFAULT_SIZE: BoardSize = BoardSize::NINE;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Rules {
@@ -285,11 +328,11 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: BoardSize) -> Self {
         Self::with_rules(size, Rules::default())
     }
 
-    pub fn with_rules(size: usize, rules: Rules) -> Self {
+    pub fn with_rules(size: BoardSize, rules: Rules) -> Self {
         let game_id = NEXT_GAME_ID.fetch_add(1, Ordering::Relaxed);
         Self {
             rules,
@@ -298,7 +341,7 @@ impl Game {
                     game: game_id,
                     node: 0,
                 },
-                board: Board::new(size),
+                board: Board::new(size.get()),
                 turn: Stone::Black,
                 last_move: None,
             }],
@@ -331,8 +374,8 @@ impl Game {
         }
     }
 
-    pub fn size(&self) -> usize {
-        self.current().board.size()
+    pub fn size(&self) -> BoardSize {
+        BoardSize(self.current().board.size())
     }
 
     pub fn rules(&self) -> Rules {
@@ -644,9 +687,9 @@ mod tests {
 
     #[test]
     fn new_game_is_empty_and_black_to_play() {
-        let game = Game::new(9);
+        let game = Game::new(BoardSize::NINE);
 
-        assert_eq!(game.size(), 9);
+        assert_eq!(game.size(), BoardSize::NINE);
         assert_eq!(game.rules(), Rules::Chinese);
         assert_eq!(game.turn(), Stone::Black);
         assert_eq!(game.last_move(), None);
@@ -663,7 +706,7 @@ mod tests {
 
     #[test]
     fn play_places_stone_and_switches_turn() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
 
         assert_eq!(game.stone_at(4, 4), Some(Stone::Black));
         assert_eq!(game.turn(), Stone::White);
@@ -675,7 +718,7 @@ mod tests {
 
     #[test]
     fn rejects_occupied_and_out_of_bounds_points() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
 
         assert_eq!(game.stone_at(9, 0), None);
         assert_eq!(game.stone_at(0, 9), None);
@@ -797,7 +840,7 @@ mod tests {
 
     #[test]
     fn undo_and_redo_restore_state() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
         let undone = game.undo().unwrap();
 
         assert_eq!(undone.stone_at(4, 4), None);
@@ -816,7 +859,7 @@ mod tests {
 
     #[test]
     fn new_move_after_undo_discards_redo() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
         let game = game.undo().unwrap().play(3, 3).unwrap();
 
         assert_eq!(game.stone_at(3, 3), Some(Stone::Black));
@@ -831,12 +874,15 @@ mod tests {
             Rules::ALL.map(|rules| rules.label()),
             ["中国", "日韩", "应氏"]
         );
-        assert_eq!(Game::with_rules(9, Rules::Ing).rules(), Rules::Ing);
+        assert_eq!(
+            Game::with_rules(BoardSize::NINE, Rules::Ing).rules(),
+            Rules::Ing
+        );
     }
 
     #[test]
     fn records_play_and_pass_history() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
         assert_eq!(game.moves(), &[Move::Play(4, 4)]);
 
         let game = game.pass();
@@ -851,7 +897,12 @@ mod tests {
 
     #[test]
     fn keeps_full_history_while_replaying() {
-        let game = Game::new(9).play(4, 4).unwrap().play(3, 3).unwrap().pass();
+        let game = Game::new(BoardSize::NINE)
+            .play(4, 4)
+            .unwrap()
+            .play(3, 3)
+            .unwrap()
+            .pass();
 
         assert_eq!(game.cursor(), 3);
         assert!(!game.is_replaying());
@@ -876,13 +927,13 @@ mod tests {
 
     #[test]
     fn replay_rejects_out_of_range_turns() {
-        let game = Game::new(9).play(4, 4).unwrap();
+        let game = Game::new(BoardSize::NINE).play(4, 4).unwrap();
         assert!(game.replay_to(2).is_none());
     }
 
     #[test]
     fn pass_is_undoable() {
-        let game = Game::new(9).pass();
+        let game = Game::new(BoardSize::NINE).pass();
 
         assert_eq!(game.turn(), Stone::White);
         assert_eq!(game.last_move(), None);
@@ -901,7 +952,11 @@ mod tests {
 
     #[test]
     fn board_view_snapshots_the_current_position_only() {
-        let game = Game::new(9).play(4, 4).unwrap().play(3, 3).unwrap();
+        let game = Game::new(BoardSize::NINE)
+            .play(4, 4)
+            .unwrap()
+            .play(3, 3)
+            .unwrap();
         let view = game.undo().unwrap().view();
 
         assert_eq!(view.size(), 9);
@@ -938,8 +993,19 @@ mod tests {
     }
 
     #[test]
+    fn board_size_only_accepts_supported_values() {
+        for size in [BoardSize::NINE, BoardSize::THIRTEEN, BoardSize::NINETEEN] {
+            assert_eq!(BoardSize::new(size.get()).unwrap(), size);
+        }
+        assert!(BoardSize::new(0).is_err());
+        assert!(BoardSize::new(10).is_err());
+        assert!(BoardSize::new(18).is_err());
+        assert_eq!(BoardSize::NINETEEN.to_string(), "19");
+    }
+
+    #[test]
     fn node_ids_are_stable_across_replay_and_unique_across_branches() {
-        let game = Game::new(9);
+        let game = Game::new(BoardSize::NINE);
         let root = game.node_id();
 
         let first = game.play(4, 4).unwrap();
@@ -958,7 +1024,7 @@ mod tests {
         assert_eq!(branch.node_id_at(1), Some(branch.node_id()));
         assert_eq!(branch.node_id_at(2), None);
 
-        let other_game = Game::new(9);
+        let other_game = Game::new(BoardSize::NINE);
         assert_ne!(other_game.node_id(), root);
     }
 }

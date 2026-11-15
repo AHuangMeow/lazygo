@@ -1,5 +1,5 @@
 use crate::analysis::engine::AnalysisQuery;
-use crate::game::{Game, Komi, Move, Rules, DEFAULT_SIZE};
+use crate::game::{BoardSize, Game, Komi, Move, Rules, DEFAULT_SIZE};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PendingMove {
@@ -43,7 +43,7 @@ impl Session {
     pub fn analysis_query(&self, max_visits: u32) -> AnalysisQuery {
         AnalysisQuery {
             node_id: self.game.node_id(),
-            size: self.game.size(),
+            size: self.game.size().get(),
             rules: self.game.rules(),
             komi: self.komi.value(),
             moves: self.game.moves().to_vec(),
@@ -80,7 +80,7 @@ impl Session {
     }
 
     pub fn select(&mut self, x: usize, y: usize) {
-        if self.game.is_replaying() || x >= self.game.size() || y >= self.game.size() {
+        if self.game.is_replaying() || x >= self.game.size().get() || y >= self.game.size().get() {
             return;
         }
 
@@ -188,7 +188,7 @@ impl Session {
 
         AnalysisQuery {
             node_id,
-            size: self.game.size(),
+            size: self.game.size().get(),
             rules: self.game.rules(),
             komi: self.komi.value(),
             moves,
@@ -213,7 +213,7 @@ impl Session {
         self.reset_armed = false;
     }
 
-    pub fn set_size(&mut self, size: usize) {
+    pub fn set_size(&mut self, size: BoardSize) {
         if self.settings_locked() {
             return;
         }
@@ -373,7 +373,7 @@ mod tests {
 
         assert!(session.settings_locked());
         assert!(session.pending().is_none());
-        assert_eq!(session.game().size(), 13);
+        assert_eq!(session.game().size(), BoardSize::THIRTEEN);
         assert_eq!(session.game().rules(), Rules::Japanese);
         assert_eq!(session.komi().value(), 6.5);
         assert_eq!(session.game().all_moves().len(), 3);
@@ -405,7 +405,7 @@ mod tests {
         let text = session.sgf_text();
         let record = crate::sgf::parse_sgf(&text).unwrap();
 
-        assert_eq!(record.size, 9);
+        assert_eq!(record.size, BoardSize::NINE);
         assert_eq!(record.moves, session.game().all_moves());
         assert_eq!(record.komi.value(), 7.5);
     }
@@ -415,10 +415,10 @@ mod tests {
         let mut session = Session::new();
 
         session.set_rules(Rules::Japanese);
-        session.set_size(13);
+        session.set_size(BoardSize::THIRTEEN);
 
         assert_eq!(session.game().rules(), Rules::Japanese);
-        assert_eq!(session.game().size(), 13);
+        assert_eq!(session.game().size(), BoardSize::THIRTEEN);
 
         session.select(6, 6);
         session.confirm();
@@ -428,7 +428,7 @@ mod tests {
         assert!(session.game().is_initial());
         assert!(!session.settings_locked());
         assert_eq!(session.game().rules(), Rules::Japanese);
-        assert_eq!(session.game().size(), 13);
+        assert_eq!(session.game().size(), BoardSize::THIRTEEN);
         assert_eq!(session.komi().value(), 6.5);
     }
 
@@ -439,11 +439,11 @@ mod tests {
         session.select(4, 4);
         session.confirm();
         session.set_rules(Rules::Ing);
-        session.set_size(19);
+        session.set_size(BoardSize::NINETEEN);
         session.set_komi(Komi::parse("7.5").unwrap());
 
         assert_eq!(session.game().rules(), Rules::Chinese);
-        assert_eq!(session.game().size(), 9);
+        assert_eq!(session.game().size(), BoardSize::NINE);
         assert_eq!(session.komi().value(), 7.5);
     }
 

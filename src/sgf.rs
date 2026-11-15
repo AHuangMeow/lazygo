@@ -1,8 +1,8 @@
-use crate::game::{Komi, Move, Rules, BOARD_SIZES};
+use crate::game::{BoardSize, Komi, Move, Rules};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SgfRecord {
-    pub size: usize,
+    pub size: BoardSize,
     pub rules: Rules,
     pub komi: Komi,
     pub moves: Vec<Move>,
@@ -209,12 +209,10 @@ pub fn parse_sgf(text: &str) -> Result<SgfRecord, String> {
         Some(value) => value
             .trim()
             .parse::<usize>()
-            .map_err(|_| format!("无效的棋盘大小: {value}"))?,
-        None => 19,
+            .map_err(|_| format!("无效的棋盘大小: {value}"))
+            .and_then(|size| BoardSize::new(size).map_err(|error| error.to_string()))?,
+        None => BoardSize::NINETEEN,
     };
-    if !BOARD_SIZES.contains(&size) {
-        return Err(format!("暂不支持 {size} 路棋盘，仅支持 9、13、19 路"));
-    }
 
     let rules = match first_property(&nodes, "RU") {
         Some(value) => parse_rules(value)?,
@@ -247,7 +245,7 @@ pub fn parse_sgf(text: &str) -> Result<SgfRecord, String> {
             return Err(format!("第 {} 手颜色不连续", moves.len() + 1));
         }
 
-        moves.push(parse_move(value, size)?);
+        moves.push(parse_move(value, size.get())?);
         black_to_play = !black_to_play;
     }
 
@@ -370,7 +368,7 @@ mod tests {
 
     fn record() -> SgfRecord {
         SgfRecord {
-            size: 9,
+            size: BoardSize::NINE,
             rules: Rules::Chinese,
             komi: Komi::parse("7.5").unwrap(),
             moves: vec![
@@ -392,7 +390,7 @@ mod tests {
     #[test]
     fn round_trips_the_largest_board() {
         let record = SgfRecord {
-            size: 19,
+            size: BoardSize::NINETEEN,
             rules: Rules::Ing,
             komi: Komi::parse("8.0").unwrap(),
             moves: vec![Move::Play(18, 18), Move::Play(0, 0)],
@@ -407,7 +405,7 @@ mod tests {
     fn handles_pass_and_variations() {
         let text = "(;GM[1]SZ[9]KM[6.5]RU[Japanese];B[ee];W[];(;B[cc])(;B[dd]))";
         let record = parse_sgf(text).unwrap();
-        assert_eq!(record.size, 9);
+        assert_eq!(record.size, BoardSize::NINE);
         assert_eq!(record.rules, Rules::Japanese);
         assert_eq!(record.komi.value(), 6.5);
         assert_eq!(record.moves, vec![Move::Play(4, 4), Move::Pass]);

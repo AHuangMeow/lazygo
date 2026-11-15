@@ -188,7 +188,7 @@ impl AnalysisController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{Game, Move, Rules};
+    use crate::game::{BoardSize, Game, Move, Rules};
 
     fn query() -> AnalysisQuery {
         AnalysisQuery {
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn key_changes_with_node_and_komi() {
-        let game = Game::new(9);
+        let game = Game::new(BoardSize::NINE);
         let mut query = query();
         query.node_id = game.node_id();
         let a = AnalysisKey::new(&query, "m1");

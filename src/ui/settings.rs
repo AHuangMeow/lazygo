@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use lazygo::game::{Komi, Rules, BOARD_SIZES};
+use lazygo::game::{BoardSize, Komi, Rules, BOARD_SIZES};
 
 use super::Menu;
 
@@ -87,11 +87,11 @@ pub fn KomiField(value: Komi, locked: bool, on_input: EventHandler<Komi>) -> Ele
 
 #[component]
 pub fn SizeMenu(
-    size: usize,
+    size: BoardSize,
     locked: bool,
     open: bool,
     on_toggle: EventHandler<()>,
-    on_select: EventHandler<usize>,
+    on_select: EventHandler<BoardSize>,
 ) -> Element {
     rsx! {
         Menu {
