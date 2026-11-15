@@ -43,7 +43,6 @@ start();
 
 #[derive(serde::Deserialize)]
 pub struct PickedSgf {
-    pub name: Option<String>,
     pub text: Option<String>,
     pub error: Option<String>,
     pub cancelled: Option<bool>,

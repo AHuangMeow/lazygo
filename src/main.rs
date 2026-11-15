@@ -28,7 +28,6 @@ fn App() -> Element {
     let mut session = use_signal(Session::new);
     let mut analysis = use_signal(AnalysisUiState::new);
     let mut sgf_busy = use_signal(|| false);
-    let mut sgf_status = use_signal(|| None::<String>);
     let mut page = use_signal(|| Page::Game);
 
     use_future(move || async move {
@@ -255,7 +254,6 @@ fn App() -> Element {
                                     return;
                                 }
                                 sgf_busy.set(true);
-                                sgf_status.set(None);
 
                                 if locked {
                                     let text = session.read().sgf_text();
@@ -266,14 +264,9 @@ fn App() -> Element {
                                         })
                                         .await;
                                         match result {
-                                            Ok(Ok(path)) => {
-                                                sgf_status.set(Some(format!("已保存到 {path}")))
-                                            }
-                                            Ok(Err(error)) => {
-                                                sgf_status.set(Some(format!("保存失败: {error}")))
-                                            }
-                                            Err(error) => sgf_status
-                                                .set(Some(format!("保存失败: {error}"))),
+                                            Ok(Ok(_)) => {}
+                                            Ok(Err(error)) => eprintln!("SGF 保存失败: {error}"),
+                                            Err(error) => eprintln!("SGF 保存任务失败: {error}"),
                                         }
                                         sgf_busy.set(false);
                                     });
@@ -283,8 +276,7 @@ fn App() -> Element {
                                         let message = match eval.recv::<String>().await {
                                             Ok(message) => message,
                                             Err(_) => {
-                                                sgf_status
-                                                    .set(Some("SGF 文件选择失败".into()));
+                                                eprintln!("SGF 文件选择失败");
                                                 sgf_busy.set(false);
                                                 return;
                                             }
@@ -292,8 +284,7 @@ fn App() -> Element {
                                         let picked: PickedSgf = match serde_json::from_str(&message) {
                                             Ok(picked) => picked,
                                             Err(_) => {
-                                                sgf_status
-                                                    .set(Some("无法读取 SGF 文件".into()));
+                                                eprintln!("无法读取 SGF 文件");
                                                 sgf_busy.set(false);
                                                 return;
                                             }
@@ -303,28 +294,18 @@ fn App() -> Element {
                                             return;
                                         }
                                         if let Some(error) = picked.error {
-                                            sgf_status.set(Some(error));
+                                            eprintln!("SGF 选择失败: {error}");
                                             sgf_busy.set(false);
                                             return;
                                         }
                                         let Some(text) = picked.text else {
-                                            sgf_status.set(Some("没有收到 SGF 内容".into()));
+                                            eprintln!("没有收到 SGF 内容");
                                             sgf_busy.set(false);
                                             return;
                                         };
                                         match session.write().import_sgf(&text) {
-                                            Ok(()) => {
-                                                analysis.write().reload();
-                                                let name = picked.name.unwrap_or_default();
-                                                sgf_status.set(Some(if name.is_empty() {
-                                                    "SGF 已导入".into()
-                                                } else {
-                                                    format!("已导入 {name}")
-                                                }));
-                                            }
-                                            Err(error) => {
-                                                sgf_status.set(Some(format!("导入失败: {error}")))
-                                            }
+                                            Ok(()) => analysis.write().reload(),
+                                            Err(error) => eprintln!("SGF 导入失败: {error}"),
                                         }
                                         sgf_busy.set(false);
                                     });
@@ -341,9 +322,6 @@ fn App() -> Element {
                     }
                 }
             }
-            }
-            if let Some(message) = sgf_status() {
-                div { class: "sgf-toast", "{message}" }
             }
         }
     }
