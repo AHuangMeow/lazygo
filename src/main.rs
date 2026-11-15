@@ -5,7 +5,8 @@ mod ui;
 
 use ui::{
     AnalysisPanel, AnalysisUiState, Board, ConfirmButton, HistoryButton, HistoryDirection,
-    KomiField, ResetButton, RuleMenu, SettingsPage, SizeMenu, Topbar, TurnIndicator,
+    KomiField, PickedSgf, ResetButton, RuleMenu, SettingsPage, SizeMenu, Topbar, TurnIndicator,
+    PICK_SGF_SCRIPT,
 };
 
 const MAIN_CSS: &str = include_str!("../assets/main.css");
@@ -26,6 +27,8 @@ enum Page {
 fn App() -> Element {
     let mut session = use_signal(Session::new);
     let mut analysis = use_signal(AnalysisUiState::new);
+    let mut sgf_busy = use_signal(|| false);
+    let mut sgf_status = use_signal(|| None::<String>);
     let mut page = use_signal(|| Page::Game);
 
     use_future(move || async move {
@@ -243,9 +246,104 @@ fn App() -> Element {
                             on_candidates: move |_| analysis.write().toggle_candidates(),
                             on_replay: move |turn| session.write().replay_to(turn),
                         }
+                        button {
+                            class: "sgf-button",
+                            r#type: "button",
+                            disabled: sgf_busy(),
+                            onclick: move |_| {
+                                if sgf_busy() {
+                                    return;
+                                }
+                                sgf_busy.set(true);
+                                sgf_status.set(None);
+
+                                if locked {
+                                    let text = session.read().sgf_text();
+                                    let filename = lazygo::sgf::suggested_filename();
+                                    spawn(async move {
+                                        let result = tokio::task::spawn_blocking(move || {
+                                            lazygo::sgf::save_to_downloads(&filename, &text)
+                                        })
+                                        .await;
+                                        match result {
+                                            Ok(Ok(path)) => {
+                                                sgf_status.set(Some(format!("已保存到 {path}")))
+                                            }
+                                            Ok(Err(error)) => {
+                                                sgf_status.set(Some(format!("保存失败: {error}")))
+                                            }
+                                            Err(error) => sgf_status
+                                                .set(Some(format!("保存失败: {error}"))),
+                                        }
+                                        sgf_busy.set(false);
+                                    });
+                                } else {
+                                    spawn(async move {
+                                        let mut eval = document::eval(PICK_SGF_SCRIPT);
+                                        let message = match eval.recv::<String>().await {
+                                            Ok(message) => message,
+                                            Err(_) => {
+                                                sgf_status
+                                                    .set(Some("SGF 文件选择失败".into()));
+                                                sgf_busy.set(false);
+                                                return;
+                                            }
+                                        };
+                                        let picked: PickedSgf = match serde_json::from_str(&message) {
+                                            Ok(picked) => picked,
+                                            Err(_) => {
+                                                sgf_status
+                                                    .set(Some("无法读取 SGF 文件".into()));
+                                                sgf_busy.set(false);
+                                                return;
+                                            }
+                                        };
+                                        if picked.cancelled.unwrap_or(false) {
+                                            sgf_busy.set(false);
+                                            return;
+                                        }
+                                        if let Some(error) = picked.error {
+                                            sgf_status.set(Some(error));
+                                            sgf_busy.set(false);
+                                            return;
+                                        }
+                                        let Some(text) = picked.text else {
+                                            sgf_status.set(Some("没有收到 SGF 内容".into()));
+                                            sgf_busy.set(false);
+                                            return;
+                                        };
+                                        match session.write().import_sgf(&text) {
+                                            Ok(()) => {
+                                                analysis.write().reload();
+                                                let name = picked.name.unwrap_or_default();
+                                                sgf_status.set(Some(if name.is_empty() {
+                                                    "SGF 已导入".into()
+                                                } else {
+                                                    format!("已导入 {name}")
+                                                }));
+                                            }
+                                            Err(error) => {
+                                                sgf_status.set(Some(format!("导入失败: {error}")))
+                                            }
+                                        }
+                                        sgf_busy.set(false);
+                                    });
+                                }
+                            },
+                            if sgf_busy() {
+                                "处理中"
+                            } else if locked {
+                                "保存"
+                            } else {
+                                "导入"
+                            }
+                        }
                     }
                 }
             }
+            }
+            if let Some(message) = sgf_status() {
+                div { class: "sgf-toast", "{message}" }
             }
         }
     }

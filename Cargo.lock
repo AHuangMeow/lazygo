@@ -2956,9 +2956,12 @@ name = "lazygo"
 version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "dioxus",
  "futures-timer",
+ "jni 0.21.1",
  "katago-analysis",
+ "ndk-context",
  "serde",
  "serde_json",
  "tokio",

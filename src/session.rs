@@ -1,5 +1,5 @@
 use crate::analysis::engine::AnalysisQuery;
-use crate::game::{Game, Rules, DEFAULT_SIZE};
+use crate::game::{Game, Move, Rules, DEFAULT_SIZE};
 
 fn default_komi(rules: Rules) -> &'static str {
     match rules {
@@ -301,6 +301,41 @@ impl Session {
         self.komi = komi;
     }
 
+    pub fn import_sgf(&mut self, text: &str) -> Result<(), String> {
+        let record = crate::sgf::parse_sgf(text)?;
+        let mut game = Game::with_rules(record.size, record.rules);
+
+        for (index, mv) in record.moves.iter().enumerate() {
+            let next = match *mv {
+                Move::Play(x, y) => game.play(x, y),
+                Move::Pass => Some(game.pass()),
+            };
+            game = next.ok_or_else(|| format!("第 {} 手非法落子", index + 1))?;
+        }
+
+        self.game = game;
+        self.komi = record.komi.to_string();
+        self.started = true;
+        self.pending = None;
+        self.reset_rotation = 0;
+        self.dismiss_overlays();
+        Ok(())
+    }
+
+    pub fn sgf_text(&self) -> String {
+        let komi = self
+            .komi
+            .trim()
+            .parse()
+            .unwrap_or_else(|_| default_komi(self.game.rules()).parse().unwrap());
+        crate::sgf::write_sgf(&crate::sgf::SgfRecord {
+            size: self.game.size(),
+            rules: self.game.rules(),
+            komi,
+            moves: self.game.all_moves().to_vec(),
+        })
+    }
+
     fn dismiss_overlays(&mut self) {
         self.size_open = false;
         self.rule_open = false;
@@ -385,6 +420,53 @@ mod tests {
                 legal: true
             })
         );
+    }
+
+    #[test]
+    fn imports_sgf_and_enters_started_state() {
+        let mut session = Session::new();
+
+        session
+            .import_sgf("(;GM[1]FF[4]SZ[13]KM[6.5]RU[Japanese];B[dd];W[ee];B[])")
+            .unwrap();
+
+        assert!(session.settings_locked());
+        assert!(session.pending().is_none());
+        assert_eq!(session.game().size(), 13);
+        assert_eq!(session.game().rules(), Rules::Japanese);
+        assert_eq!(session.komi(), "6.5");
+        assert_eq!(session.game().all_moves().len(), 3);
+        assert_eq!(session.game().cursor(), 3);
+    }
+
+    #[test]
+    fn sgf_import_is_atomic_on_invalid_moves() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        session.confirm();
+        let before = session.game().clone();
+
+        let error = session.import_sgf("(;SZ[9];B[aa];B[bb])").unwrap_err();
+
+        assert!(error.contains("颜色"));
+        assert_eq!(session.game(), &before);
+    }
+
+    #[test]
+    fn sgf_round_trips_current_game() {
+        let mut session = Session::new();
+        session.select(4, 4);
+        session.confirm();
+        session.select(3, 3);
+        session.confirm();
+        session.pass();
+
+        let text = session.sgf_text();
+        let record = crate::sgf::parse_sgf(&text).unwrap();
+
+        assert_eq!(record.size, 9);
+        assert_eq!(record.moves, session.game().all_moves());
+        assert_eq!(record.komi, 7.5);
     }
 
     #[test]

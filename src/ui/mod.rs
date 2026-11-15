@@ -5,6 +5,7 @@ mod controls;
 mod menu;
 mod settings;
 mod settings_page;
+mod sgf_io;
 
 pub use analysis_panel::AnalysisPanel;
 pub use analysis_state::{AnalysisMode, AnalysisUiState};
@@ -16,3 +17,4 @@ pub use controls::{
 pub use menu::Menu;
 pub use settings::{KomiField, RuleMenu, SizeMenu};
 pub use settings_page::SettingsPage;
+pub use sgf_io::{PickedSgf, PICK_SGF_SCRIPT};
