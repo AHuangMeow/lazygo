@@ -103,6 +103,10 @@ impl AnalysisController {
         !self.pending.is_empty()
     }
 
+    pub fn is_pending(&self, key: &AnalysisKey) -> bool {
+        self.pending.contains_key(key)
+    }
+
     pub fn pending_count(&self) -> usize {
         self.pending.len()
     }

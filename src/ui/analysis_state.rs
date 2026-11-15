@@ -10,6 +10,39 @@ pub enum AnalysisMode {
     Score,
 }
 
+#[derive(Default, Debug, PartialEq, Eq)]
+struct BackfillCursor {
+    cursor: usize,
+    limit: Option<usize>,
+}
+
+impl BackfillCursor {
+    fn reset(&mut self) {
+        self.cursor = 0;
+        self.limit = None;
+    }
+
+    fn sync(&mut self, limit: Option<usize>) {
+        if self.limit != limit {
+            self.limit = limit;
+            self.cursor = 0;
+        }
+    }
+
+    fn index(&self) -> Option<usize> {
+        let limit = self.limit?;
+        (self.cursor <= limit).then_some(self.cursor)
+    }
+
+    fn advance(&mut self) {
+        self.cursor += 1;
+    }
+
+    fn complete(&self) -> bool {
+        self.limit.is_some_and(|limit| self.cursor > limit)
+    }
+}
+
 pub struct AnalysisUiState {
     controller: AnalysisController,
     enabled: bool,
@@ -23,6 +56,7 @@ pub struct AnalysisUiState {
     candidate_count: u32,
     show_candidates: bool,
     backfill_target: Option<usize>,
+    backfill: BackfillCursor,
 }
 
 impl Default for AnalysisUiState {
@@ -47,6 +81,7 @@ impl AnalysisUiState {
             candidate_count: settings.candidate_count,
             show_candidates: false,
             backfill_target: None,
+            backfill: BackfillCursor::default(),
         };
         state.reload();
         state
@@ -57,6 +92,7 @@ impl AnalysisUiState {
         self.current_key = None;
         self.error = None;
         self.enabled = false;
+        self.backfill.reset();
 
         if active_model().is_none() {
             self.panel_open = false;
@@ -78,6 +114,7 @@ impl AnalysisUiState {
         self.error = None;
         self.controller.clear_cache();
         self.backfill_target = Some(total_moves);
+        self.backfill.reset();
     }
 
     pub fn enabled(&self) -> bool {
@@ -190,12 +227,22 @@ impl AnalysisUiState {
         self.current_key = None;
         self.error = None;
         self.controller.clear_cache();
+        self.backfill.reset();
 
         if let Err(error) = save_settings(&AnalysisSettings {
             max_visits,
             candidate_count: self.candidate_count,
         }) {
             self.error = Some(error);
+        }
+    }
+
+    fn backfill_limit(&self, session: &Session) -> Option<usize> {
+        let total = session.game().all_moves().len();
+        if self.panel_open {
+            Some(total)
+        } else {
+            self.backfill_target.map(|target| target.min(total))
         }
     }
 
@@ -217,21 +264,13 @@ impl AnalysisUiState {
         if self.current.is_none() && self.controller.cache().get(&key).is_some() {
             return true;
         }
-        if self.controller.pending_count() < 2 {
-            let total = session.game().all_moves().len();
-            let limit = if self.panel_open {
-                total
-            } else if let Some(target) = self.backfill_target {
-                target.min(total)
-            } else {
-                return false;
-            };
-            return (0..=limit).any(|index| {
-                self.key_at(session, index, &model_id)
-                    .is_none_or(|key| self.controller.cache().get(&key).is_none())
-            });
+        if self.controller.pending_count() >= 2 {
+            return false;
         }
-        false
+        let Some(limit) = self.backfill_limit(session) else {
+            return false;
+        };
+        self.backfill.limit != Some(limit) || self.backfill.cursor <= limit
     }
 
     pub fn tick(&mut self, session: &Session) {
@@ -276,25 +315,45 @@ impl AnalysisUiState {
             }
         }
 
-        if self.controller.pending_count() < 2 {
-            let total = session.game().all_moves().len();
-            let limit = if self.panel_open {
-                total
-            } else if let Some(target) = self.backfill_target {
-                target.min(total)
-            } else {
-                return;
+        let Some(limit) = self.backfill_limit(session) else {
+            self.backfill.reset();
+            return;
+        };
+        self.backfill.sync(Some(limit));
+        if self.controller.pending_count() >= 2 {
+            return;
+        }
+
+        while let Some(index) = self.backfill.index() {
+            let Some(key) = self.key_at(session, index, &model_id) else {
+                break;
             };
-            for index in 0..=limit {
-                let Some(key) = self.key_at(session, index, &model_id) else {
-                    break;
-                };
-                if self.controller.cache().get(&key).is_none() {
-                    let query = session.analysis_query_at(index, self.max_visits);
-                    let _ = self.controller.ensure(query);
+            if self.controller.cache().get(&key).is_some() {
+                self.backfill.advance();
+                continue;
+            }
+            if self.controller.is_pending(&key) {
+                break;
+            }
+
+            let query = session.analysis_query_at(index, self.max_visits);
+            match self.controller.ensure(query) {
+                Ok(Some(snapshot)) => {
+                    if self.current_key.as_ref() == Some(&key) {
+                        self.current = Some(snapshot);
+                    }
+                    self.backfill.advance();
+                }
+                Ok(None) => break,
+                Err(error) => {
+                    self.error = Some(error);
                     break;
                 }
             }
+        }
+
+        if self.backfill.complete() {
+            self.backfill_target = None;
         }
     }
 
@@ -309,9 +368,60 @@ impl AnalysisUiState {
         let total = session.game().all_moves().len();
         (0..=total)
             .map(|index| {
-                let key = self.key_at(session, index, &model_id)?;
+                let key = self.key_at(session, index, model_id)?;
                 self.controller.cache().get(&key).cloned()
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BackfillCursor;
+
+    #[test]
+    fn backfill_cursor_advances_through_the_limit() {
+        let mut cursor = BackfillCursor::default();
+        cursor.sync(Some(2));
+
+        assert_eq!(cursor.index(), Some(0));
+        cursor.advance();
+        assert_eq!(cursor.index(), Some(1));
+        cursor.advance();
+        assert_eq!(cursor.index(), Some(2));
+        assert!(!cursor.complete());
+
+        cursor.advance();
+
+        assert_eq!(cursor.index(), None);
+        assert!(cursor.complete());
+    }
+
+    #[test]
+    fn changing_the_limit_restarts_the_scan() {
+        let mut cursor = BackfillCursor::default();
+        cursor.sync(Some(5));
+        cursor.advance();
+        cursor.advance();
+
+        cursor.sync(Some(5));
+        assert_eq!(cursor.index(), Some(2));
+
+        cursor.sync(Some(4));
+        assert_eq!(cursor.index(), Some(0));
+
+        cursor.sync(Some(6));
+        assert_eq!(cursor.index(), Some(0));
+    }
+
+    #[test]
+    fn reset_clears_the_limit_and_cursor() {
+        let mut cursor = BackfillCursor::default();
+        cursor.sync(Some(3));
+        cursor.advance();
+        cursor.reset();
+
+        assert_eq!(cursor.index(), None);
+        assert!(!cursor.complete());
     }
 }

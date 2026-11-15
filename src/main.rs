@@ -48,6 +48,7 @@ fn App() -> Element {
     let size = current.size();
     let rules = current.rules();
     let locked = state.settings_locked();
+    let reset_armed = state.reset_armed();
     let pending = state.pending();
     let pending_clickable = pending.is_some() && !state.pass_armed() && !state.reset_armed();
     let komi = state.komi();
@@ -202,6 +203,9 @@ fn App() -> Element {
                                     size_open.set(false);
                                     reset_rotation.with_mut(|rotation| *rotation += 360);
                                     session.write().toggle_reset();
+                                    if reset_armed {
+                                        analysis.write().start_new_game(0);
+                                    }
                                 },
                             }
                             HistoryButton {
@@ -234,7 +238,11 @@ fn App() -> Element {
                                 on_select: move |rules| {
                                     rule_open.set(false);
                                     size_open.set(false);
+                                    if locked {
+                                        return;
+                                    }
                                     session.write().set_rules(rules);
+                                    analysis.write().start_new_game(0);
                                 },
                             }
                             KomiField {
@@ -255,7 +263,11 @@ fn App() -> Element {
                             on_select: move |size| {
                                 rule_open.set(false);
                                 size_open.set(false);
+                                if locked {
+                                    return;
+                                }
                                 session.write().set_size(size);
+                                analysis.write().start_new_game(0);
                             },
                         }
                     }
