@@ -8,13 +8,20 @@ pub struct PendingMove {
     pub legal: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+enum Overlay {
+    #[default]
+    None,
+    Pass,
+    Reset,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Session {
     game: Game,
     started: bool,
-    pass_armed: bool,
+    overlay: Overlay,
     pending: Option<PendingMove>,
-    reset_armed: bool,
     komi: Komi,
 }
 
@@ -29,9 +36,8 @@ impl Session {
         Self {
             game: Game::new(DEFAULT_SIZE),
             started: false,
-            pass_armed: false,
+            overlay: Overlay::None,
             pending: None,
-            reset_armed: false,
             komi: Rules::Chinese.default_komi(),
         }
     }
@@ -56,7 +62,7 @@ impl Session {
     }
 
     pub fn reset_armed(&self) -> bool {
-        self.reset_armed
+        self.overlay == Overlay::Reset
     }
 
     pub fn komi(&self) -> Komi {
@@ -68,11 +74,11 @@ impl Session {
     }
 
     pub fn pass_armed(&self) -> bool {
-        self.pass_armed
+        self.overlay == Overlay::Pass
     }
 
     pub fn can_confirm(&self) -> bool {
-        self.pending.is_some_and(|pending| pending.legal)
+        self.overlay == Overlay::None && self.pending.is_some_and(|pending| pending.legal)
     }
 
     pub fn cancel_pending(&mut self) {
@@ -80,6 +86,9 @@ impl Session {
     }
 
     pub fn select(&mut self, x: usize, y: usize) {
+        if self.overlay != Overlay::None {
+            return;
+        }
         if self.game.is_replaying() || x >= self.game.size().get() || y >= self.game.size().get() {
             return;
         }
@@ -99,7 +108,7 @@ impl Session {
     }
 
     pub fn confirm(&mut self) {
-        if self.game.is_replaying() {
+        if self.overlay != Overlay::None || self.game.is_replaying() {
             return;
         }
         let Some(pending) = self.pending else {
@@ -124,18 +133,19 @@ impl Session {
         if self.game.is_replaying() {
             return;
         }
-        if self.pass_armed {
-            self.pass_armed = false;
+        if self.overlay == Overlay::Pass {
+            self.overlay = Overlay::None;
             self.pass();
         } else {
             self.pending = None;
-            self.pass_armed = true;
-            self.reset_armed = false;
+            self.overlay = Overlay::Pass;
         }
     }
 
     pub fn cancel_pass(&mut self) {
-        self.pass_armed = false;
+        if self.overlay == Overlay::Pass {
+            self.overlay = Overlay::None;
+        }
     }
 
     pub fn pass(&mut self) {
@@ -145,7 +155,7 @@ impl Session {
         self.game = self.game.pass();
         self.started = true;
         self.pending = None;
-        self.dismiss_overlays();
+        self.overlay = Overlay::None;
     }
 
     pub fn undo(&mut self) {
@@ -172,7 +182,6 @@ impl Session {
         if let Some(next) = self.game.replay_to(turn) {
             self.game = next;
             self.pending = None;
-            self.pass_armed = false;
             self.dismiss_overlays();
         }
     }
@@ -197,20 +206,22 @@ impl Session {
     }
 
     pub fn toggle_reset(&mut self) {
-        self.pass_armed = false;
+        let was_armed = self.overlay == Overlay::Reset;
+        self.overlay = Overlay::None;
         self.pending = None;
 
-        if self.reset_armed {
+        if was_armed {
             self.game = Game::with_rules(self.game.size(), self.game.rules());
             self.started = false;
-            self.reset_armed = false;
         } else {
-            self.reset_armed = true;
+            self.overlay = Overlay::Reset;
         }
     }
 
     pub fn cancel_reset(&mut self) {
-        self.reset_armed = false;
+        if self.overlay == Overlay::Reset {
+            self.overlay = Overlay::None;
+        }
     }
 
     pub fn set_size(&mut self, size: BoardSize) {
@@ -280,8 +291,7 @@ impl Session {
     }
 
     fn dismiss_overlays(&mut self) {
-        self.reset_armed = false;
-        self.pass_armed = false;
+        self.overlay = Overlay::None;
     }
 }
 
@@ -585,6 +595,25 @@ mod tests {
         assert!(session.pass_armed());
         assert!(session.pending().is_none());
         assert!(!session.can_confirm());
+    }
+
+    #[test]
+    fn overlays_block_selection_and_confirmation() {
+        let mut session = Session::new();
+
+        session.toggle_pass();
+        session.select(4, 4);
+        assert!(session.pending().is_none());
+        session.cancel_pass();
+
+        session.select(4, 4);
+        assert!(session.pending().is_some());
+        session.toggle_reset();
+        assert!(session.pending().is_none());
+        session.confirm();
+
+        assert!(session.game().is_initial());
+        assert!(!session.settings_locked());
     }
 
     #[test]
