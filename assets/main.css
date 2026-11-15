@@ -714,6 +714,7 @@ body {
 }
 
 .analysis-row {
+    position: relative;
     display: flex;
     flex: 1;
     min-height: 0;
@@ -722,11 +723,12 @@ body {
 }
 
 .sgf-button {
-    flex: none;
-    align-self: flex-start;
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 3;
     min-width: 64px;
     height: 38px;
-    margin-left: 10px;
     padding: 6px 10px;
     border: 2.5px solid var(--ctp-overlay0);
     border-radius: 10px;
