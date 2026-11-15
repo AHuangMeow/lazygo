@@ -22,6 +22,7 @@ pub struct AnalysisUiState {
     max_visits: u32,
     candidate_count: u32,
     show_candidates: bool,
+    backfill_target: Option<usize>,
 }
 
 impl Default for AnalysisUiState {
@@ -45,6 +46,7 @@ impl AnalysisUiState {
             max_visits: settings.max_visits,
             candidate_count: settings.candidate_count,
             show_candidates: false,
+            backfill_target: None,
         };
         state.reload();
         state
@@ -68,6 +70,14 @@ impl AnalysisUiState {
                 self.error = Some(error);
             }
         }
+    }
+
+    pub fn start_new_game(&mut self, total_moves: usize) {
+        self.current = None;
+        self.current_key = None;
+        self.error = None;
+        self.controller.clear_cache();
+        self.backfill_target = Some(total_moves);
     }
 
     pub fn enabled(&self) -> bool {
@@ -190,12 +200,16 @@ impl AnalysisUiState {
         if self.current.is_none() && self.controller.cached(&query).is_some() {
             return true;
         }
-        if self.panel_open && self.controller.pending_count() < 2 {
+        if self.controller.pending_count() < 2 {
             let total = session.game().all_moves().len();
-            if self.controller.cache().len() > total {
+            let limit = if self.panel_open {
+                total
+            } else if let Some(target) = self.backfill_target {
+                target.min(total)
+            } else {
                 return false;
-            }
-            return (0..=total).any(|index| {
+            };
+            return (0..=limit).any(|index| {
                 let query = session.analysis_query_at(index, self.max_visits);
                 self.controller.cached(&query).is_none()
             });
@@ -245,15 +259,20 @@ impl AnalysisUiState {
             }
         }
 
-        if self.panel_open && self.controller.pending_count() < 2 {
+        if self.controller.pending_count() < 2 {
             let total = session.game().all_moves().len();
-            if self.controller.cache().len() < total + 1 {
-                for index in 0..=total {
-                    let query = session.analysis_query_at(index, self.max_visits);
-                    if self.controller.cached(&query).is_none() {
-                        let _ = self.controller.ensure(query);
-                        break;
-                    }
+            let limit = if self.panel_open {
+                total
+            } else if let Some(target) = self.backfill_target {
+                target.min(total)
+            } else {
+                return;
+            };
+            for index in 0..=limit {
+                let query = session.analysis_query_at(index, self.max_visits);
+                if self.controller.cached(&query).is_none() {
+                    let _ = self.controller.ensure(query);
+                    break;
                 }
             }
         }

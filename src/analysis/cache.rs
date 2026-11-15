@@ -177,6 +177,7 @@ impl AnalysisController {
 
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+        self.pending.clear();
     }
 }
 

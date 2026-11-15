@@ -303,8 +303,12 @@ fn App() -> Element {
                                             sgf_busy.set(false);
                                             return;
                                         };
-                                        match session.write().import_sgf(&text) {
-                                            Ok(()) => analysis.write().reload(),
+                                        let imported = session.write().import_sgf(&text);
+                                        match imported {
+                                            Ok(()) => {
+                                                let total = session.read().game().all_moves().len();
+                                                analysis.write().start_new_game(total);
+                                            }
                                             Err(error) => eprintln!("SGF 导入失败: {error}"),
                                         }
                                         sgf_busy.set(false);
