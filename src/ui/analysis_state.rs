@@ -136,12 +136,30 @@ impl AnalysisUiState {
         self.current.as_ref()
     }
 
+    fn current_key(&self, session: &Session, model_id: &str) -> AnalysisKey {
+        AnalysisKey::from_parts(
+            session.game().node_id(),
+            session.komi().value(),
+            self.max_visits,
+            model_id,
+        )
+    }
+
+    fn key_at(&self, session: &Session, turn: usize, model_id: &str) -> Option<AnalysisKey> {
+        let node_id = session.game().node_id_at(turn)?;
+        Some(AnalysisKey::from_parts(
+            node_id,
+            session.komi().value(),
+            self.max_visits,
+            model_id,
+        ))
+    }
+
     pub fn current_matches(&self, session: &Session) -> bool {
         let Some(model_id) = self.controller.model_id() else {
             return false;
         };
-        let query = session.analysis_query(self.max_visits);
-        self.current_key.as_ref() == Some(&AnalysisKey::new(&query, model_id))
+        self.current_key.as_ref() == Some(&self.current_key(session, model_id))
     }
 
     pub fn toggle_panel(&mut self) {
@@ -188,8 +206,7 @@ impl AnalysisUiState {
         let Some(model_id) = self.controller.model_id() else {
             return false;
         };
-        let query = session.analysis_query(self.max_visits);
-        let key = AnalysisKey::new(&query, model_id);
+        let key = self.current_key(session, model_id);
 
         if self.current_key.as_ref() != Some(&key) {
             return true;
@@ -197,7 +214,7 @@ impl AnalysisUiState {
         if self.controller.has_pending() {
             return true;
         }
-        if self.current.is_none() && self.controller.cached(&query).is_some() {
+        if self.current.is_none() && self.controller.cache().get(&key).is_some() {
             return true;
         }
         if self.controller.pending_count() < 2 {
@@ -210,8 +227,8 @@ impl AnalysisUiState {
                 return false;
             };
             return (0..=limit).any(|index| {
-                let query = session.analysis_query_at(index, self.max_visits);
-                self.controller.cached(&query).is_none()
+                self.key_at(session, index, &model_id)
+                    .is_none_or(|key| self.controller.cache().get(&key).is_none())
             });
         }
         false
@@ -221,16 +238,16 @@ impl AnalysisUiState {
         if !self.enabled {
             return;
         }
-        let Some(model_id) = self.controller.model_id() else {
+        let Some(model_id) = self.controller.model_id().map(str::to_owned) else {
             return;
         };
-        let query = session.analysis_query(self.max_visits);
-        let key = AnalysisKey::new(&query, model_id);
+        let key = self.current_key(session, &model_id);
 
         if self.current_key.as_ref() != Some(&key) {
+            let query = session.analysis_query(self.max_visits);
             self.current_key = Some(key.clone());
             self.current = None;
-            match self.controller.ensure(query.clone()) {
+            match self.controller.ensure(query) {
                 Ok(Some(snapshot)) => self.current = Some(snapshot),
                 Ok(None) => {}
                 Err(error) => self.error = Some(error),
@@ -254,7 +271,7 @@ impl AnalysisUiState {
         }
 
         if self.current.is_none() {
-            if let Some(snapshot) = self.controller.cached(&query) {
+            if let Some(snapshot) = self.controller.cache().get(&key).cloned() {
                 self.current = Some(snapshot);
             }
         }
@@ -269,8 +286,11 @@ impl AnalysisUiState {
                 return;
             };
             for index in 0..=limit {
-                let query = session.analysis_query_at(index, self.max_visits);
-                if self.controller.cached(&query).is_none() {
+                let Some(key) = self.key_at(session, index, &model_id) else {
+                    break;
+                };
+                if self.controller.cache().get(&key).is_none() {
+                    let query = session.analysis_query_at(index, self.max_visits);
                     let _ = self.controller.ensure(query);
                     break;
                 }
@@ -289,8 +309,7 @@ impl AnalysisUiState {
         let total = session.game().all_moves().len();
         (0..=total)
             .map(|index| {
-                let query = session.analysis_query_at(index, self.max_visits);
-                let key = AnalysisKey::new(&query, model_id);
+                let key = self.key_at(session, index, &model_id)?;
                 self.controller.cache().get(&key).cloned()
             })
             .collect()

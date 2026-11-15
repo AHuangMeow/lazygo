@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 pub const BOARD_SIZES: [usize; 3] = [9, 13, 19];
 pub const DEFAULT_SIZE: usize = 9;
 
@@ -227,13 +229,12 @@ impl Board {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct NodeId(u64);
+static NEXT_GAME_ID: AtomicU64 = AtomicU64::new(1);
 
-impl NodeId {
-    pub fn get(self) -> u64 {
-        self.0
-    }
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct NodeId {
+    game: u64,
+    node: u64,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -279,6 +280,7 @@ pub struct Game {
     states: Vec<State>,
     moves: Vec<Move>,
     cursor: usize,
+    game_id: u64,
     next_node_id: u64,
 }
 
@@ -288,16 +290,21 @@ impl Game {
     }
 
     pub fn with_rules(size: usize, rules: Rules) -> Self {
+        let game_id = NEXT_GAME_ID.fetch_add(1, Ordering::Relaxed);
         Self {
             rules,
             states: vec![State {
-                id: NodeId(0),
+                id: NodeId {
+                    game: game_id,
+                    node: 0,
+                },
                 board: Board::new(size),
                 turn: Stone::Black,
                 last_move: None,
             }],
             moves: Vec::new(),
             cursor: 0,
+            game_id,
             next_node_id: 1,
         }
     }
@@ -466,7 +473,10 @@ impl Game {
         next.states.truncate(self.cursor + 1);
         next.moves.truncate(self.cursor);
         next.moves.push(Move::Play(x, y));
-        let id = NodeId(next.next_node_id);
+        let id = NodeId {
+            game: next.game_id,
+            node: next.next_node_id,
+        };
         next.next_node_id += 1;
         next.states.push(State {
             id,
@@ -484,7 +494,10 @@ impl Game {
         next.states.truncate(self.cursor + 1);
         next.moves.truncate(self.cursor);
         next.moves.push(Move::Pass);
-        let id = NodeId(next.next_node_id);
+        let id = NodeId {
+            game: next.game_id,
+            node: next.next_node_id,
+        };
         next.next_node_id += 1;
         next.states.push(State {
             id,
@@ -524,6 +537,10 @@ pub fn star_points(size: usize) -> &'static [(usize, usize)] {
 mod tests {
     use super::*;
 
+    fn node(id: u64) -> NodeId {
+        NodeId { game: 0, node: id }
+    }
+
     fn board(size: usize, black: &[(usize, usize)], white: &[(usize, usize)]) -> Board {
         let mut board = Board::new(size);
 
@@ -546,7 +563,7 @@ mod tests {
         id: u64,
     ) -> State {
         State {
-            id: NodeId(id),
+            id: node(id),
             board: board(size, black, white),
             turn,
             last_move: None,
@@ -574,6 +591,7 @@ mod tests {
             states: vec![state(size, black, white, turn, 0)],
             moves: Vec::new(),
             cursor: 0,
+            game_id: 0,
             next_node_id: 1,
         }
     }
@@ -599,6 +617,7 @@ mod tests {
             ],
             moves: vec![Move::Play(2, 1)],
             cursor: 1,
+            game_id: 0,
             next_node_id: 2,
         }
     }
@@ -607,13 +626,13 @@ mod tests {
         let mut game = ko_game(rules);
         let captured = game.states[1].clone();
         game.states.push(State {
-            id: NodeId(2),
+            id: node(2),
             board: captured.board.clone(),
             turn: Stone::Black,
             last_move: None,
         });
         game.states.push(State {
-            id: NodeId(3),
+            id: node(3),
             board: captured.board,
             turn: Stone::White,
             last_move: None,
@@ -732,13 +751,13 @@ mod tests {
             rules: Rules::Chinese,
             states: vec![
                 State {
-                    id: NodeId(0),
+                    id: node(0),
                     board: board(3, &[(1, 1)], &[]),
                     turn: Stone::White,
                     last_move: None,
                 },
                 State {
-                    id: NodeId(1),
+                    id: node(1),
                     board: Board::new(3),
                     turn: Stone::Black,
                     last_move: None,
@@ -746,6 +765,7 @@ mod tests {
             ],
             moves: Vec::new(),
             cursor: 1,
+            game_id: 0,
             next_node_id: 2,
         };
 
@@ -921,7 +941,6 @@ mod tests {
     fn node_ids_are_stable_across_replay_and_unique_across_branches() {
         let game = Game::new(9);
         let root = game.node_id();
-        assert_eq!(root.get(), 0);
 
         let first = game.play(4, 4).unwrap();
         let first_id = first.node_id();
@@ -938,5 +957,8 @@ mod tests {
         assert_eq!(branch.node_id_at(0), Some(root));
         assert_eq!(branch.node_id_at(1), Some(branch.node_id()));
         assert_eq!(branch.node_id_at(2), None);
+
+        let other_game = Game::new(9);
+        assert_ne!(other_game.node_id(), root);
     }
 }

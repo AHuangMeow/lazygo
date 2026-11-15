@@ -42,6 +42,7 @@ impl Session {
 
     pub fn analysis_query(&self, max_visits: u32) -> AnalysisQuery {
         AnalysisQuery {
+            node_id: self.game.node_id(),
             size: self.game.size(),
             rules: self.game.rules(),
             komi: self.komi.value(),
@@ -178,9 +179,15 @@ impl Session {
 
     pub fn analysis_query_at(&self, turn: usize, max_visits: u32) -> AnalysisQuery {
         let mut moves = self.game.all_moves().to_vec();
-        moves.truncate(turn.min(moves.len()));
+        let turn = turn.min(moves.len());
+        moves.truncate(turn);
+        let node_id = self
+            .game
+            .node_id_at(turn)
+            .unwrap_or_else(|| self.game.node_id());
 
         AnalysisQuery {
+            node_id,
             size: self.game.size(),
             rules: self.game.rules(),
             komi: self.komi.value(),

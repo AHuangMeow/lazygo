@@ -2,26 +2,26 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::Receiver;
 
 use crate::analysis::engine::{AnalysisEvent, AnalysisQuery, AnalysisService, AnalysisSnapshot};
-use crate::game::{Move, Rules};
+use crate::game::NodeId;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AnalysisKey {
-    pub size: usize,
-    pub rules: Rules,
+    pub node_id: NodeId,
     pub komi_bits: u64,
-    pub moves: Vec<Move>,
     pub max_visits: u32,
     pub model_id: String,
 }
 
 impl AnalysisKey {
     pub fn new(query: &AnalysisQuery, model_id: &str) -> Self {
+        Self::from_parts(query.node_id, query.komi, query.max_visits, model_id)
+    }
+
+    pub fn from_parts(node_id: NodeId, komi: f64, max_visits: u32, model_id: &str) -> Self {
         Self {
-            size: query.size,
-            rules: query.rules,
-            komi_bits: query.komi.to_bits(),
-            moves: query.moves.clone(),
-            max_visits: query.max_visits,
+            node_id,
+            komi_bits: komi.to_bits(),
+            max_visits,
             model_id: model_id.to_string(),
         }
     }
@@ -184,9 +184,11 @@ impl AnalysisController {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::{Game, Move, Rules};
 
     fn query() -> AnalysisQuery {
         AnalysisQuery {
+            node_id: NodeId::default(),
             size: 9,
             rules: Rules::Chinese,
             komi: 7.5,
@@ -206,6 +208,22 @@ mod tests {
 
         assert_ne!(a, b);
         assert_ne!(a, c);
+    }
+
+    #[test]
+    fn key_changes_with_node_and_komi() {
+        let game = Game::new(9);
+        let mut query = query();
+        query.node_id = game.node_id();
+        let a = AnalysisKey::new(&query, "m1");
+
+        query.node_id = game.play(4, 4).unwrap().node_id();
+        let b = AnalysisKey::new(&query, "m1");
+        query.komi = 6.5;
+        let c = AnalysisKey::new(&query, "m1");
+
+        assert_ne!(a, b);
+        assert_ne!(b, c);
     }
 
     #[test]

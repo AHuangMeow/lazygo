@@ -8,10 +8,11 @@ use katago_analysis::{
     AnalysisRequest, AnalysisResult, Analyzer, Coord, Move as KataMove, Player, Rules as KataRules,
 };
 
-use crate::game::{Move, Rules, Stone};
+use crate::game::{Move, NodeId, Rules, Stone};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnalysisQuery {
+    pub node_id: NodeId,
     pub size: usize,
     pub rules: Rules,
     pub komi: f64,
@@ -318,6 +319,7 @@ mod tests {
     #[test]
     fn builds_moves_with_alternating_players() {
         let query = AnalysisQuery {
+            node_id: NodeId::default(),
             size: 9,
             rules: Rules::Chinese,
             komi: 7.5,
