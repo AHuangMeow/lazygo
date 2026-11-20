@@ -71,6 +71,58 @@ struct PickedModel {
 }
 
 #[component]
+fn NumberField(
+    value: u32,
+    min: u32,
+    max: u32,
+    step: u32,
+    disabled: bool,
+    aria_label: &'static str,
+    on_commit: EventHandler<u32>,
+) -> Element {
+    let mut draft = use_signal(|| value.to_string());
+    let mut synced = use_signal(|| value);
+
+    use_effect(move || {
+        if synced() != value {
+            synced.set(value);
+            draft.set(value.to_string());
+        }
+    });
+
+    let draft_value = draft();
+    let invalid = draft_value
+        .parse::<u32>()
+        .map(|value| !(min..=max).contains(&value))
+        .unwrap_or(true);
+
+    rsx! {
+        input {
+            class: if invalid { "depth-input invalid" } else { "depth-input" },
+            r#type: "number",
+            min: "{min}",
+            max: "{max}",
+            step: "{step}",
+            value: "{draft_value}",
+            disabled,
+            aria_label,
+            aria_invalid: if invalid { "true" } else { "false" },
+            oninput: move |event| draft.set(event.value()),
+            onchange: move |_| {
+                match draft().parse::<u32>() {
+                    Ok(value) => {
+                        let value = value.clamp(min, max);
+                        draft.set(value.to_string());
+                        on_commit.call(value);
+                    }
+                    Err(_) => draft.set(value.to_string()),
+                }
+            },
+        }
+    }
+}
+
+#[component]
 pub fn SettingsPage(
     max_visits: u32,
     candidate_count: u32,
@@ -83,7 +135,6 @@ pub fn SettingsPage(
     let mut menu_open = use_signal(|| false);
     let mut busy = use_signal(|| false);
     let mut status = use_signal(|| None::<String>);
-    let mut depth = use_signal(|| max_visits);
 
     let model_items: Vec<ModelInfo> = model_list();
     let active_id = active();
@@ -92,7 +143,7 @@ pub fn SettingsPage(
         .and_then(|id| model_items.iter().find(|model| model.id == id))
         .map(|model| model.name.as_str())
         .unwrap_or("禁用");
-    let current_depth = depth();
+    let current_depth = max_visits;
 
     rsx! {
         section { class: "settings-page",
@@ -269,21 +320,14 @@ pub fn SettingsPage(
                 span { class: "settings-label", "分析深度" }
                 span { class: "settings-leader" }
                 div { class: "settings-control",
-                    input {
-                        class: "depth-input",
-                        r#type: "number",
-                        min: "1",
-                        max: "5000",
-                        step: "10",
-                        value: "{current_depth}",
+                    NumberField {
+                        value: current_depth,
+                        min: 1,
+                        max: 5000,
+                        step: 10,
                         disabled: active_id.is_none(),
-                        onchange: move |event| {
-                            if let Ok(value) = event.value().parse::<u32>() {
-                                let value = value.clamp(1, 5000);
-                                depth.set(value);
-                                on_depth.call(value);
-                            }
-                        },
+                        aria_label: "Analysis depth",
+                        on_commit: move |value| on_depth.call(value),
                     }
                 }
             }
@@ -292,19 +336,14 @@ pub fn SettingsPage(
                 span { class: "settings-label", "推荐选点" }
                 span { class: "settings-leader" }
                 div { class: "settings-control",
-                    input {
-                        class: "depth-input",
-                        r#type: "number",
-                        min: "1",
-                        max: "10",
-                        step: "1",
-                        value: "{candidate_count}",
+                    NumberField {
+                        value: candidate_count,
+                        min: 1,
+                        max: 10,
+                        step: 1,
                         disabled: active_id.is_none(),
-                        onchange: move |event| {
-                            if let Ok(value) = event.value().parse::<u32>() {
-                                on_candidate_count.call(value.clamp(1, 10));
-                            }
-                        },
+                        aria_label: "Candidate count",
+                        on_commit: move |value| on_candidate_count.call(value),
                     }
                 }
             }

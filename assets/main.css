@@ -1234,3 +1234,7 @@ body {
 .board-hit-layer.pending {
     z-index: 4;
 }
+
+.depth-input.invalid {
+    border-color: var(--ctp-red);
+}
