@@ -10,3 +10,6 @@
 *.jks
 *.keystore
 *.p12
+
+# Local design notes
+docs/
